@@ -15,6 +15,17 @@
 > Explain the general motivation for doing this. The purpose here is to build
 > consensus, and get agreement that this needs to be solved.
 
+## User Stories
+
+> Provide several short, simple descriptions of the requirement from the
+> perspectives of users. Consider all the different kinds of users there may be,
+> and incorporate stories for each of them.
+>
+> E.g.
+>
+>  - "As a _developer_ I want `$GOAL` so that `$BENEFIT`"
+>  - "As a _cluster administrator_ I want `$GOAL` so that `$BENEFIT`"
+
 ## Goals
 
 > As an extension of the motivation, enumerate specific goals.

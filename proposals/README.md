@@ -30,10 +30,11 @@ reasons not to):
    to find co-authors or collaborators that can join the effort.
 2. Create an initial PR. This should only include "What?" and "Why?". That is,
    what the proposal is trying to solve at a high level, and the motivation
-   and goals to do it. For the first PR, there should be no "How?": stay away
-   from implementation details, code and APIs at first as these can take a
-   long time to build consensus on, and need specific focus. Let's be sure the
-   community agrees on the "What?" and "Why?" first.
+   and goals to do it. Provide user stories, as these can help illustrate the
+   need from various perspectives. For the first PR, there should be no "How?":
+   stay away from implementation details, code and APIs at first as these can
+   take a long time to build consensus on, and need specific focus. Let's be
+   sure the community agrees on the "What?" and "Why?" first.
 3. Later PRs can start introducing the "How?". This needs to start by
    identifying which SIG and sub-project(s) the proposal is suggesting to bring
    itself to, or if its proposing new sub-projects. It should include high
