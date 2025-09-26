@@ -36,8 +36,8 @@ Learn how to engage with the Kubernetes community on the [community page](https:
 You can reach out to members of the community at:
 
 - [Discussion Board](https://github.com/kubernetes-sigs/wg-ai-gateway/discussions)
-- [Slack channel](https://kubernetes.slack.com/messages/sig-network)
-- [Mailing List](https://groups.google.com/a/kubernetes.io/g/sig-network)
+- [Slack channel](https://kubernetes.slack.com/messages/wg-ai-gateway)
+- [Mailing List](https://groups.google.com/a/kubernetes.io/g/wg-ai-gateway)
 
 ### Code of conduct
 
