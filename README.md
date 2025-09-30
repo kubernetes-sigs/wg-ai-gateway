@@ -31,13 +31,18 @@ supporters for your proposal in the community who can help move it forward with 
 
 ## Community, discussion, contribution, and support
 
-Learn how to engage with the Kubernetes community on the [community page](https://kubernetes.io/community/).
+Our community meetings are held on Monday/Thursday ([Zoom Calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/k8s?view=month), [Meeting Notes](https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs)).
+* WG AI Gateway Bi-Weekly Meeting (Earlier Option): [Mondays at 12PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=12PM&tz=UTC).
+* WG AI Gateway Bi-Weekly Meeting (Later Option): [Thursdays at 6PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=6PM&tz=UTC).
 
-You can reach out to members of the community at:
-
-- [Discussion Board](https://github.com/kubernetes-sigs/wg-ai-gateway/discussions)
-- [Slack channel](https://kubernetes.slack.com/messages/wg-ai-gateway)
+You can reach out to members of the community using the following communication channels:
+- [Slack channel wg-ai-gateway](https://kubernetes.slack.com/messages/wg-ai-gateway)
 - [Mailing List](https://groups.google.com/a/kubernetes.io/g/wg-ai-gateway)
+- [Discussion Board](https://github.com/kubernetes-sigs/wg-ai-gateway/discussions)
+
+Contributions are readily welcomed!  
+
+Learn how to engage with the Kubernetes community on the [community page](https://kubernetes.io/community/).
 
 ### Code of conduct
 
