@@ -4,6 +4,7 @@
 * Collaborators: <Add Supporters, Reviewers, etc here. These are individuals
   that are participators and/or stakeholders, though they may not be directly
   authoring content.>
+* Status: Proposed
 
 # What?
 

@@ -1,6 +1,7 @@
 # Payload Processing
 
 * Authors: @shaneutt, @kflynn
+* Status: Proposed
 
 # What?
 
