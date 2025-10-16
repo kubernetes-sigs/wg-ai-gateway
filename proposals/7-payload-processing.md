@@ -6,12 +6,13 @@
 # What?
 
 Define standards for declaratively adding processing steps to HTTP requests and
-responses in Kubernetes across the entire payload, including the body.
+responses in Kubernetes across the entire payload, this means processing the
+body of the request in addition to the headers.
 
 # Why?
 
 Modern workloads require the ability to process the full payload of an HTTP
-request and response, including both header and body:
+request and response, including both headers and the body:
 
 * **AI Inference Security**: Guard against bad prompts for inference requests,
   or misaligned responses.
@@ -31,11 +32,12 @@ payload processing is not standardized in Kubernetes today.
 * **Payload Processors**: Features capable of processing the full payload of
   requests and/or responses (including headers and body).
 
-> **Note**:  At a definition level, we do not intend "Payload Processors" to be construed with
-> any existing details or any other implementations that might have similarities. For instance,
-> we are not trying to prescribe that these are done natively, or as extensions. We are also
-> aware that many existing API Gateways include "filter" mechanisms which could be seen as
-> fitting this definition, but we are not limiting discussion to only these existing mechanisms.
+> **Note**:  At a definition level, we do not intend "Payload Processors" to be
+> construed with any existing details or any other implementations that might
+> have similarities. For instance, we are not trying to prescribe that these
+> are done natively, or as extensions. We are also aware that many existing API
+> Gateways include "filter" mechanisms which could be seen as fitting this
+> definition, but we are not limiting discussion to only these existing mechanisms.
 
 ## User Stories
 
