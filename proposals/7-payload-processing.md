@@ -7,7 +7,7 @@
 
 Define standards for declaratively adding processing steps to HTTP requests and
 responses in Kubernetes across the entire payload, this means processing the
-body of the request in addition to the headers.
+body of the request, and possibly the response, in addition to the headers.
 
 # Why?
 
