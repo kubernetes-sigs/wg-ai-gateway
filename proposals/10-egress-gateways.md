@@ -36,6 +36,24 @@ ingress use case.
   cloud services to workloads, I need fail-over from one cloud provider to
   others when the primary cloud provider is overwhelmed or in a failure state.
 
+* As a gateway admin providing egress routing to external services, I need
+  to be able to verify the identity of that external source and enforce
+  authentication to secure that connection.
+
+* As a gateway admin providing egress routing to external services, I need
+  to be able to verify the client connection to the external service.
+
+* As a gateway admin providing egress routing to external services, I need
+  to be able to manage certificate authorities for egress connections, such
+  that I can pin certificates or provide custom authorities (e.g.
+  intermediate, self-signed, etc). I should also be able to integrate
+  Certificate Revocation Lists (CRLs) to untrust revoked certificates.
+
+* As a gateway admin providing egress routing to external service, DNS
+  resolution for these sources needs to be controlled and secured. I need to
+  be able to fine-tune control the DNS resolution of remote FQDNs including
+  the ability to enable reverse DNS mapping checks.
+
 * As a cluster admin I need to provide inference to workloads on my cluster,
   but I provide a dedicated cluster for this so that I can manage it
   separately.
