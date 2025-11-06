@@ -88,19 +88,89 @@ ingress use case.
 
 # How?
 
-TODO: in later PRs.
+## Overview
 
+This proposal aims to provide egress gateway capabilities by defining:
 
-> **This should be left blank until the "What?" and "Why?" are agreed upon,
-> as defining "How?" the goals are accomplished is not important unless we can
-> first even agree on what the problem is, and why we want to solve it.
->
-> This section is fairly freeform, because (again) these proposals will
-> eventually find there way into any number of different final proposal formats
-> in other projects. However, the general guidance is to break things down into
-> highly focused sections as much as possible to help make things easier to
-> read and review. Long, unbroken walls of code and YAML in this document are
-> not advisable as that may increase the time it takes to review.
+1. **Resource Model**: How to represent egress gateways and external backends
+2. **Routing Modes**: Support for both endpoint mode (direct connections) and parent mode (gateway chaining)
+3. **Policy Scopes**: Mechanisms to apply policies at Gateway, Route, and Backend levels
+4. **Policy Hooks for AI Workload Support**: E.g. [payload processing](proposals/7-payload-processing.md) capabilities for inference and agentic workloads
+
+## Open Design Questions
+
+### Gateway Resource: Reuse vs. New Type
+
+Two approaches are under consideration:
+
+**Option A: Reuse Gateway API Gateway**
+- Leverage existing `Gateway`, `HTTPRoute`, and `GRPCRoute` resources
+- HTTPRoute references to external backends make it an egress gateway
+- Requires Backend resource to represent external destinations
+
+**Option B: New EgressGateway Resource**
+- Introduce dedicated `EgressGateway` resource type
+- Enables egress-specific fields (e.g., global CIDR allow-lists) without policy attachment overhead
+- Clearer separation of ingress vs egress concerns
+
+**Recommendation needed**: Feedback requested on whether the semantics justify a new resource or if Gateway reuse is sufficient.
+
+### Backend Resource and Policy Application
+
+To avoid heavy reliance on policy attachment, policies can be embedded directly in the `Backend` resource:
+
+```yaml
+apiVersion: agentic.networking.x-k8s.io/v1alpha1
+kind: Backend
+metadata:
+  name: openai-backend
+spec:
+  destination:
+    hostname: api.openai.com
+    port: 443
+  rules:
+  - name: inject-credentials
+    secretRef:
+      name: openai-api-key
+      namespace: platform-secrets
+  - name: rate-limit
+    requestsPerMinute: 1000
+  - name: allowed-regions
+    regions: [us-east, us-west]
+```
+
+This allows backend-level policies (credentials, rate limits, regional restrictions) without separate PolicyAttachment resources.
+
+## Routing Modes
+
+### Endpoint Mode
+Client traffic flows through the egress gateway directly to an external endpoint (FQDN or IP). The gateway applies policies and routing logic before forwarding to the destination.
+
+### Parent Mode
+Client traffic flows through a local egress gateway to an upstream gateway before reaching the final endpoint. This enables gateway chaining for multi-cluster or multi-zone topologies.
+
+## Policy Application Scopes
+
+Policies must be applicable at three levels:
+
+1. **Gateway-level**: Global rules affecting all traffic (e.g., cluster-wide CIDR restrictions, denied model lists)
+2. **Route-level**: Per-request logic via HTTPRoute filters (e.g., payload transforms, compliance checks)
+3. **Backend-level**: Destination-specific rules via Backend resource (e.g., credential injection, rate limits)
+
+## AI Workload Considerations
+
+For inference and agentic workloads, the solution must support:
+
+- **Payload Processing**: Request/response transformations (PII redaction, prompt injection detection, content filtering)
+- **Protocol Support**: HTTP/gRPC for inference APIs, with future consideration for MCP and A2A protocols
+- **Multi-destination Routing**: Failover between cloud providers and cross-cluster endpoints
+
+## Next Steps
+
+1. Decide on Gateway resource approach (reuse vs. new EgressGateway type)
+2. Define Backend resource schema with embedded policy rules
+3. Specify filter extension points for payload processing
+4. Align with multi-cluster and agentic networking proposals
 
 # Additional Criteria
 
