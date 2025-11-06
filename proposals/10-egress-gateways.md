@@ -1,6 +1,6 @@
 # Egress Gateways
 
-* Authors: @shaneutt
+* Authors: @shaneutt @usize
 * Status: Proposed
 
 # What?
@@ -92,10 +92,11 @@ ingress use case.
 
 This proposal aims to provide egress gateway capabilities by defining:
 
-1. **Resource Model**: How to represent egress gateways and external backends
-2. **Routing Modes**: Support for both endpoint mode (direct connections) and parent mode (gateway chaining)
-3. **Policy Scopes**: Mechanisms to apply policies at Gateway, Route, and Backend levels
-4. **Policy Hooks for AI Workload Support**: E.g. [payload processing](proposals/7-payload-processing.md) capabilities for inference and agentic workloads
+1. Resource model using Gateway + HTTPRoute with a Backend for destinations (Service or FQDN).
+2. Two routing modes: Endpoint (direct) and Parent (gateway chaining).
+3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
+4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
+
 
 ## Open Design Questions
 
@@ -113,11 +114,13 @@ Two approaches are under consideration:
 - Enables egress-specific fields (e.g., global CIDR allow-lists) without policy attachment overhead
 - Clearer separation of ingress vs egress concerns
 
+Option B implies defining equivalents of parentRefs, listeners, and route attachment; this is a significant fork from Gateway API and should be justified by clear need for an egress specific spec.
+
 **Recommendation needed**: Feedback requested on whether the semantics justify a new resource or if Gateway reuse is sufficient.
 
 ### Backend Resource and Policy Application
 
-To avoid heavy reliance on policy attachment, policies can be embedded directly in the `Backend` resource:
+To avoid heavy reliance on policy attachment, embed **typed** policy into `Backend` with clear phases and failure semantics, or use separate CRDs with `targetRef: Backend`.
 
 ```yaml
 apiVersion: agentic.networking.x-k8s.io/v1alpha1
@@ -126,20 +129,36 @@ metadata:
   name: openai-backend
 spec:
   destination:
-    hostname: api.openai.com
-    port: 443
-  rules:
+    type: FQDN
+    fqdn:
+      hostname: api.openai.com
+      port: 443
+  tls:
+    mode: SIMPLE            # SIMPLE | MUTUAL
+    serverName: api.openai.com
+    caBundleRef:
+      name: vendor-ca
+    # clientCertificateRef:  # if MUTUAL
+    #   name: egress-client-cert
+  extensions:
   - name: inject-credentials
-    secretRef:
-      name: openai-api-key
-      namespace: platform-secrets
-  - name: rate-limit
-    requestsPerMinute: 1000
-  - name: allowed-regions
-    regions: [us-east, us-west]
+    type: CredentialInjector
+    phase: request-headers   # request-headers|request-body|connect|backend-request|backend-response|response-body|response-headers
+    priority: 10
+    failOpen: false
+    config:
+      secretRef:
+        name: openai-api-key
+        namespace: platform-secrets
+  - name: rate-qos
+    type: QoSController
+    phase: backend-request
+    priority: 30
+    failOpen: true
+    config:
+      requestsPerMinute: 1000
 ```
-
-This allows backend-level policies (credentials, rate limits, regional restrictions) without separate PolicyAttachment resources.
+Alternatively, policies MAY be separate CRDs (e.g., `BackendTLSPolicy`, `EgressPolicy`) with `spec.targetRef: Backend`, avoiding schema growth on `Backend`.
 
 ## Routing Modes
 
@@ -147,23 +166,34 @@ This allows backend-level policies (credentials, rate limits, regional restricti
 Client traffic flows through the egress gateway directly to an external endpoint (FQDN or IP). The gateway applies policies and routing logic before forwarding to the destination.
 
 ### Parent Mode
-Client traffic flows through a local egress gateway to an upstream gateway before reaching the final endpoint. This enables gateway chaining for multi-cluster or multi-zone topologies.
+Client traffic flows through a local egress gateway to an upstream gateway before reaching the final endpoint. This enables gateway chaining for multi-cluster or multi-zone topologies. The local egress gateway treats the parent as a single upstream. Local retries are limited to establishing the parent connection. Request-level retries are performed by the parent. Implementations MUST prevent retry loops across gateways.
 
 ## Policy Application Scopes
 
 Policies must be applicable at three levels:
 
 1. **Gateway-level**: Global rules affecting all traffic (e.g., cluster-wide CIDR restrictions, denied model lists)
-2. **Route-level**: Per-request logic via HTTPRoute filters (e.g., payload transforms, compliance checks)
-3. **Backend-level**: Destination-specific rules via Backend resource (e.g., credential injection, rate limits)
+2. **Route-level**: Per-request logic via filters `HTTPRoute.rules[].filters[ExtensionRef]` (e.g., payload transforms, compliance checks)
+3. **Backend-level**: credentials, TLS, DNS, rate/QoS via `Backend.extensions` or backend-targeted policies.
+
+### Conflict Resolution
+When multiple policies influence the same request:
+- **Specificity precedence**: Route > Backend > Gateway.
+- **Same-level ties**: Implementations MUST use a deterministic tie-break (e.g., lexical name order) and surface status indicating the conflict.
 
 ## AI Workload Considerations
 
 For inference and agentic workloads, the solution must support:
 
-- **Payload Processing**: Request/response transformations (PII redaction, prompt injection detection, content filtering)
+- **[Payload Processing](../7-payload-processing.md)**: Request/response transformations (PII redaction, prompt injection detection, content filtering)
+  - note: Evaluation of payload processors occurs in the data plane; controllers reconcile objects into proxy configuration.
 - **Protocol Support**: HTTP/gRPC for inference APIs, with future consideration for MCP and A2A protocols
 - **Multi-destination Routing**: Failover between cloud providers and cross-cluster endpoints
+
+## Observability Considerations
+
+- Implementations SHOULD expose metrics tagged by `{gateway, route, backend, namespace, serviceAccount}` and surface conditions (e.g., `Accepted`, `Programmed`, `Degraded`).
+- Denials and transform failures SHOULD emit Events.
 
 ## Next Steps
 
