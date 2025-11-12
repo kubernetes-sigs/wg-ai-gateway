@@ -207,7 +207,7 @@ Policies must be applicable at three levels:
 ### Conflict Resolution
 When multiple policies influence the same request:
 - **Specificity precedence**: Route > Backend > Gateway.
-- **Same-level ties**: Implementations MUST use a deterministic lexical name order tie-break and surface status indicating the conflict.
+- **Same-level ties**: Implementations MUST use a deterministic tie-break where the oldest resource (based on `metadata.creationTimestamp`) wins, and surface status indicating the conflict.
 
 Implementations MUST apply this ordering to ensure consistent behavior.
 
