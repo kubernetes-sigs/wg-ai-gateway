@@ -117,7 +117,7 @@ This proposal aims to provide egress gateway capabilities by defining:
 
 ### Backend Resource and Policy Application
 
-To avoid heavy reliance on policy attachment, embed **typed** policy into `Backend` with clear phases and failure semantics, or use separate CRDs with `targetRef: Backend`.
+Policies will be added to each `Backend` via `Backend.spec.extensions[]` with clear phases and failure semantics.
 
 ```yaml
 apiVersion: agentic.networking.x-k8s.io/v1alpha1
@@ -131,8 +131,8 @@ spec:
       hostname: api.openai.com
       port: 443
   tls:
-    mode: SIMPLE            # SIMPLE | MUTUAL
-    serverName: api.openai.com
+    mode: Terminate | Passthrough | Mutual 
+    sni: api.openai.com
     caBundleRef:
       name: vendor-ca
     # clientCertificateRef:  # if MUTUAL
@@ -155,7 +155,35 @@ spec:
     config:
       requestsPerMinute: 1000
 ```
-Alternatively, policies MAY be separate CRDs (e.g., `BackendTLSPolicy`, `EgressPolicy`) with `spec.targetRef: Backend`, avoiding schema growth on `Backend`.
+
+A catalog of standard policies will be defined:
+
+(non-exhaustive list)
+- CredentialInjector
+- QoSController
+
+Additional policies may be defined. They MUST declare the following fields:
+
+- phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-body, response-headers} 
+- priority: integer. (Lower runs first within the same phase).
+- failOpen: boolean. Default false (closed).
+- preAuth: boolean. Default false. (trusted-peer context unavailable before authorization)
+- config: type-specific schema.
+
+### Phases
+
+Phases are always evaluated in the following order:
+
+1. request-headers
+2. request-body
+3. connect
+4. backend-request
+5. backend-response
+6. response-body
+7. response-headers
+
+Authn/authz and rate limiting execute before `request-body` and later phases unless a processor is explicitly marked preAuth: true. 
+Implementations MUST prevent processors marked preAuth from accessing trusted-peer context.
 
 ## Routing Modes
 
