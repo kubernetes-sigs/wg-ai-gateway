@@ -140,7 +140,7 @@ spec:
   extensions:
   - name: inject-credentials
     type: CredentialInjector
-    phase: request-headers   # request-headers|request-body|connect|backend-request|backend-response|response-body|response-headers
+    phase: request-headers
     priority: 10
     failOpen: false
     config:
@@ -164,7 +164,7 @@ A catalog of standard policies will be defined:
 
 Additional policies may be defined. They MUST declare the following fields:
 
-- phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-body, response-headers} 
+- phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-headers, response-body} 
 - priority: integer. (Lower runs first within the same phase).
 - failOpen: boolean. Default false (closed).
 - preAuth: boolean. Default false. (trusted-peer context unavailable before authorization)
@@ -179,8 +179,8 @@ Phases are always evaluated in the following order:
 3. connect
 4. backend-request
 5. backend-response
-6. response-body
-7. response-headers
+6. response-headers
+7. response-body
 
 Authn/authz and rate limiting execute before `request-body` and later phases unless a processor is explicitly marked preAuth: true. 
 Implementations MUST prevent processors marked preAuth from accessing trusted-peer context.
