@@ -227,11 +227,10 @@ For inference and agentic workloads, the solution must support:
 
 ## Next Steps
 
-1. Decide on Gateway resource approach (reuse vs. new EgressGateway type)
-2. Define Backend resource schema.
-3. Specify default Backend policies e.g. CredentialInjector and QoSController.
-4. Specify filter extension points for payload processing
-5. Align with multi-cluster and agentic networking proposals
+1. Define Backend resource schema.
+2. Specify default Backend policies e.g. CredentialInjector and QoSController.
+3. Specify filter extension points for payload processing
+4. Align with multi-cluster and agentic networking proposals
 
 # Additional Criteria
 
