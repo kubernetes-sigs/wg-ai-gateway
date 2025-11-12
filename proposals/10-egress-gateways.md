@@ -120,7 +120,7 @@ This proposal aims to provide egress gateway capabilities by defining:
 Policies will be added to each `Backend` via `Backend.spec.extensions[]` with clear phases and failure semantics.
 
 ```yaml
-apiVersion: agentic.networking.x-k8s.io/v1alpha1
+apiVersion: gateway.networking.k8s.io/v1alpha1 
 kind: Backend
 metadata:
   name: openai-backend
@@ -139,7 +139,7 @@ spec:
     #   name: egress-client-cert
   extensions:
   - name: inject-credentials
-    type: CredentialInjector
+    type: gateway.networking.k8s.io/CredentialInjector:v1 
     phase: request-headers
     priority: 10
     failOpen: false
@@ -148,7 +148,7 @@ spec:
         name: openai-api-key
         namespace: platform-secrets
   - name: rate-qos
-    type: QoSController
+    type: gateway.networking.k8s.io/QoSController:v1
     phase: backend-request
     priority: 30
     failOpen: true
@@ -156,21 +156,29 @@ spec:
       requestsPerMinute: 1000
 ```
 
-A catalog of standard policies will be defined:
+#### Processor Catalog
 
-(non-exhaustive list)
+A catalog of standard policies will be defined, for example:
 - CredentialInjector
 - QoSController
 
-Additional policies may be defined. They MUST declare the following fields:
+TODO: decide on a definitive catalog of processors.
+
+Controllers MUST publish the set of supported processor kinds and versions for a GatewayClass via GatewayClass.status.parametersRef or an implementation-specific status.
+
+Admission MUST reject unknown catalog kinds and MAY admit domain-scoped kinds but set status Degraded with reason UnsupportedExtensionType until support is advertised.
+
+#### Processor Extensions
+
+Additional processors may be defined. They MUST declare the following fields:
 
 - phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-headers, response-body} 
 - priority: integer. (Lower runs first within the same phase).
 - failOpen: boolean. Default false (closed).
 - preAuth: boolean. Default false. (trusted-peer context unavailable before authorization)
-- config: type-specific schema.
+- config: type-specific opaque object validated against the type's JSONSchema.
 
-### Phases
+#### Phases
 
 Phases are always evaluated in the following order:
 
