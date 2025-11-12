@@ -191,7 +191,10 @@ Implementations MUST prevent processors marked preAuth from accessing trusted-pe
 Client traffic flows through the egress gateway directly to an external endpoint (FQDN or IP). The gateway applies policies and routing logic before forwarding to the destination.
 
 ### Parent Mode
-Client traffic flows through a local egress gateway to an upstream gateway before reaching the final endpoint. This enables gateway chaining for multi-cluster or multi-zone topologies. The local egress gateway treats the parent as a single upstream. Local retries are limited to establishing the parent connection. Request-level retries are performed by the parent. Implementations MUST prevent retry loops across gateways.
+Client traffic flows through a local egress gateway to an upstream gateway before reaching the final endpoint. This enables gateway chaining for multi-cluster or multi-zone topologies. The local egress gateway treats the parent as a single upstream. Local retries are limited to establishing the parent connection. Request-level retries are performed by the parent.
+
+Operators MUST use network policy or sidecar/egress proxy configuration to deny direct egress from workloads and force all outbound traffic to the Gateway.
+Retry loops across gateways are prohibited; implementations MUST tag requests to prevent looped retries.
 
 ## Policy Application Scopes
 
@@ -225,9 +228,10 @@ For inference and agentic workloads, the solution must support:
 ## Next Steps
 
 1. Decide on Gateway resource approach (reuse vs. new EgressGateway type)
-2. Define Backend resource schema with embedded policy rules
-3. Specify filter extension points for payload processing
-4. Align with multi-cluster and agentic networking proposals
+2. Define Backend resource schema.
+3. Specify default Backend policies e.g. CredentialInjector and QoSController.
+4. Specify filter extension points for payload processing
+5. Align with multi-cluster and agentic networking proposals
 
 # Additional Criteria
 
