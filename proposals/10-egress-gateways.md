@@ -100,23 +100,20 @@ This proposal aims to provide egress gateway capabilities by defining:
 
 ## Open Design Questions
 
-### Gateway Resource: Reuse vs. New Type
+### Gateway Resource
 
-Two approaches are under consideration:
-
-**Option A: Reuse Gateway API Gateway**
+**Preferred Approach: Reuse Gateway API Gateway**
 - Leverage existing `Gateway`, `HTTPRoute`, and `GRPCRoute` resources
 - HTTPRoute references to external backends make it an egress gateway
 - Requires Backend resource to represent external destinations
 
-**Option B: New EgressGateway Resource**
+**Alternatives Considered: New EgressGateway Resource**
 - Introduce dedicated `EgressGateway` resource type
 - Enables egress-specific fields (e.g., global CIDR allow-lists) without policy attachment overhead
 - Clearer separation of ingress vs egress concerns
 
-Option B implies defining equivalents of parentRefs, listeners, and route attachment; this is a significant fork from Gateway API and should be justified by clear need for an egress specific spec.
-
-**Recommendation needed**: Feedback requested on whether the semantics justify a new resource or if Gateway reuse is sufficient.
+**Cons**
+- Implies defining equivalents of parentRefs, listeners, and route attachment.
 
 ### Backend Resource and Policy Application
 
