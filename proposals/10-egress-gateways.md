@@ -178,6 +178,9 @@ Additional processors may be defined. They MUST declare the following fields:
 - preAuth: boolean. Default false. (trusted-peer context unavailable before authorization)
 - config: type-specific opaque object validated against the type's JSONSchema.
 
+Controllers MUST reject processors that declare unsupported phases or invalid schemas.
+Controllers SHOULD reconcile each processor independently, surfacing a `Degraded` status on a per-extension basis (to avoid requeuing entire Backend objects).
+
 #### Phases
 
 Phases are always evaluated in the following order:
