@@ -164,7 +164,7 @@ A catalog of standard policies will be defined, for example:
 
 TODO: decide on a definitive catalog of processors.
 
-Controllers MUST publish the set of supported processor kinds and versions for a GatewayClass via GatewayClass.status.parametersRef or an implementation-specific status.
+Controllers MUST publish the set of supported processor kinds and versions for a GatewayClass via GatewayClass.status.parametersRef or an implementation-specific status e.g. GatewayClass.status.supportedExtensionKinds.
 
 Admission MUST reject unknown catalog kinds and MAY admit domain-scoped kinds but set status Degraded with reason UnsupportedExtensionType until support is advertised.
 
