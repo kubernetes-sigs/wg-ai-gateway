@@ -222,8 +222,8 @@ For inference and agentic workloads, the solution must support:
 
 ## Observability Considerations
 
-- Implementations SHOULD expose metrics tagged by `{gateway, route, backend, namespace, serviceAccount}` and surface conditions (e.g., `Accepted`, `Programmed`, `Degraded`).
-- Denials and transform failures SHOULD emit Events.
+- Implementations MUST expose metrics tagged by `{gateway, route, backend, namespace, serviceAccount}` and surface conditions (e.g., `Accepted`, `Programmed`, `Degraded`).
+- Denials and transform failures MUST emit Events.
 
 ## Next Steps
 
