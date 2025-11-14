@@ -164,7 +164,7 @@ A catalog of standard policies will be defined, for example:
 
 TODO: decide on a definitive catalog of processors.
 
-Controllers MUST publish the set of supported processor kinds and versions for a GatewayClass via GatewayClass.status.parametersRef or an implementation-specific status e.g. GatewayClass.status.supportedExtensionKinds.
+Controllers MUST publish the set of supported processor kinds and versions for a GatewayClass via `GatewayClass.status.parametersRef` or an implementation-specific status e.g. `GatewayClass.status.supportedExtensionKinds`.
 
 Admission MUST reject unknown catalog kinds and MAY admit domain-scoped kinds but set status Degraded with reason UnsupportedExtensionType until support is advertised.
 
@@ -180,6 +180,112 @@ Additional processors may be defined. They MUST declare the following fields:
 
 Controllers MUST reject processors that declare unsupported phases or invalid schemas.
 Controllers SHOULD reconcile each processor independently, surfacing a `Degraded` status on a per-extension basis (to avoid requeuing entire Backend objects).
+
+#### Processor Config Schema Example
+
+Below is an example of how a config may be defined and made available as a ConfigMap.
+
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acme-piidetector-v1-schema
+  namespace: gateway-system
+data:
+  schema.json: |
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "acme.example.com/PIIDetector:v1 config",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The PII model to use."
+        },
+        "redactionStyle": {
+          "type": "string",
+          "enum": ["mask", "delete", "hash"],
+          "default": "mask",
+          "description": "How matched PII is transformed"
+        },
+        "confidenceThreshold": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.6,
+          "description": "Minimum confidence score to redact"
+        },
+        "maxBodyBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1048576,
+          "description": "Maximum bytes of body this processor will buffer (0 = unlimited per impl)"
+        }
+      },
+      "required": ["modelRef"]
+    }
+```
+
+The controller may then advertise the processor via `GatewayClass.status.supportedExtensionKinds`.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy-gateway
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+status:
+  supportedExtensionKinds:
+  - group: gateway.networking.k8s.io
+    kind: CredentialInjector
+    versions: ["v1"]
+  - group: acme.example.com
+    kind: PIIDetector
+    versions: ["v1"]
+    schemaRefs:
+    - apiVersion: v1
+      kind: ConfigMap
+      name: acme-piidetector-v1-schema
+      namespace: gateway-system
+```
+
+Finally the processor may be attached to a `Backend` as such:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1alpha1
+kind: Backend
+metadata:
+  name: no-pii-openai
+  namespace: app
+spec:
+  destination:
+    type: FQDN
+    fqdn:
+      hostname: api.openai.com
+      port: 443
+  tls:
+    mode: Mutual
+    sni: api.openai.com
+    caBundleRef:
+      name: vendor-ca
+    # clientCertificateRef:
+    #   name: egress-client-cert
+  extensions:
+  - name: pii-detector
+    type: acme.example.com/PIIDetector:v1
+    phase: request-body
+    priority: 20
+    failOpen: false
+    preAuth: true
+    config:
+      modelRef: pii-detect-small
+      redactionStyle: delete
+      confidenceThreshold: 0.7
+      maxBodyBytes: 2097152
+```
 
 #### Phases
 
