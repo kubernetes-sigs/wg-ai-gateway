@@ -92,11 +92,11 @@ ingress use case.
 
 This proposal aims to provide egress gateway capabilities by defining:
 
-1. Resource model using Gateway + HTTPRoute with a Backend for destinations (Service or FQDN).
+1. Resource model using Gateway + HTTPRoute with an additional resource (e.g. `Backend`) for destinations (Service or FQDN).
+    - Other resource models (e.g., Mesh-attached egress via sidecars) are possible and are explicitly left open for future exploration.
 2. Two routing modes: Endpoint (direct) and Parent (gateway chaining).
 3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
 4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
-
 
 ## Open Design Questions
 
@@ -115,12 +115,18 @@ This proposal aims to provide egress gateway capabilities by defining:
 **Cons**
 - Implies defining equivalents of parentRefs, listeners, and route attachment.
 
+**Alternatives Considered: Mesh Resource**
+- Use a `Mesh`-style resource to express egress policies attached to sidecars, as implemented by some service meshes (for example, [Linkerd’s egress configuration](https://linkerd.io/2-edge/reference/egress-network/)).
+- Allows egress to be expressed at the data-plane level without the need for a Gateway instance.
+
+This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude Mesh-based egress models in future work.
+
 ### Backend Resource and Policy Application
 
 Policies will be added to each `Backend` via `Backend.spec.extensions[]` with clear phases and failure semantics.
 
 ```yaml
-apiVersion: gateway.networking.k8s.io/v1alpha1 
+apiVersion: gateway.networking.k8s.io/v1alpha1
 kind: Backend
 metadata:
   name: openai-backend
@@ -131,7 +137,7 @@ spec:
       hostname: api.openai.com
       port: 443
   tls:
-    mode: Terminate | Passthrough | Mutual 
+    mode: Terminate | Passthrough | Mutual
     sni: api.openai.com
     caBundleRef:
       name: vendor-ca
@@ -139,7 +145,7 @@ spec:
     #   name: egress-client-cert
   extensions:
   - name: inject-credentials
-    type: gateway.networking.k8s.io/CredentialInjector:v1 
+    type: gateway.networking.k8s.io/CredentialInjector:v1
     phase: request-headers
     priority: 10
     failOpen: false
@@ -172,7 +178,7 @@ Admission MUST reject unknown catalog kinds and MAY admit domain-scoped kinds bu
 
 Additional processors may be defined. They MUST declare the following fields:
 
-- phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-headers, response-body} 
+- phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-headers, response-body}
 - priority: integer. (Lower runs first within the same phase).
 - failOpen: boolean. Default false (closed).
 - preAuth: boolean. Default false. (trusted-peer context unavailable before authorization)
@@ -184,6 +190,10 @@ Controllers SHOULD reconcile each processor independently, surfacing a `Degraded
 #### Processor Config Schema Example
 
 Below is an example of how a config may be defined and made available as a ConfigMap.
+
+**Note:** This example attaches a PII detector at the `Backend` level to illustrate the extension mechanism.
+The appropriate attachment point for a given processor type (Gateway-level policy, `HTTPRoute` filter, `Backend` extension, or Mesh-attached processor) remains an open design question.
+
 
 ```yaml
 apiVersion: v1
@@ -299,7 +309,7 @@ Phases are always evaluated in the following order:
 6. response-headers
 7. response-body
 
-Authn/authz and rate limiting execute before `request-body` and later phases unless a processor is explicitly marked preAuth: true. 
+Authn/authz and rate limiting execute before `request-body` and later phases unless a processor is explicitly marked preAuth: true.
 Implementations MUST prevent processors marked preAuth from accessing trusted-peer context.
 
 ## Routing Modes
@@ -346,8 +356,9 @@ For inference and agentic workloads, the solution must support:
 
 1. Define Backend resource schema.
 2. Specify default Backend policies e.g. CredentialInjector and QoSController.
-3. Specify filter extension points for payload processing
-4. Align with multi-cluster and agentic networking proposals
+3. Specify filter extension points for payload processing.
+4. Align with multi-cluster and agentic networking proposals.
+5. Prototype this design in at least one implementation to validate `Backend` vs `Route` vs Mesh placement and refine the API surface based on real-world usage.
 
 # Additional Criteria
 
