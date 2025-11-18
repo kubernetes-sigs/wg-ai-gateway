@@ -158,7 +158,7 @@ spec:
 
 #### Processor Catalog
 
-A catalog of standard policies will be defined, for example:
+A catalog of standard filters/policies will be defined, for example:
 - CredentialInjector
 - QoSController
 
