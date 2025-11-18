@@ -31,7 +31,7 @@ supporters for your proposal in the community who can help move it forward with 
 
 ## Community, discussion, contribution, and support
 
-Our community meetings are held on Monday/Thursday ([Zoom Calendar](https://zoom-lfx.platform.linuxfoundation.org/meetings/k8s?view=month), [Meeting Notes](https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs)).
+Our community meetings are held on Monday/Thursday ([Calendar](https://www.kubernetes.dev/resources/calendar/), [Meeting Notes](https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs)).
 * WG AI Gateway Bi-Weekly Meeting (Earlier Option): [Mondays at 12PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=12PM&tz=UTC).
 * WG AI Gateway Bi-Weekly Meeting (Later Option): [Thursdays at 6PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=6PM&tz=UTC).
 
