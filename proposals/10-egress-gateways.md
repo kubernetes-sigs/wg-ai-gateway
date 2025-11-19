@@ -1,6 +1,6 @@
 # Egress Gateways
 
-* Authors: @shaneutt
+* Authors: @shaneutt @usize
 * Status: Proposed
 
 # What?
@@ -88,19 +88,277 @@ ingress use case.
 
 # How?
 
-TODO: in later PRs.
+## Overview
+
+This proposal aims to provide egress gateway capabilities by defining:
+
+1. Resource model using Gateway + HTTPRoute with an additional resource (e.g. `Backend`) for destinations (Service or FQDN).
+    - Other resource models (e.g., Mesh-attached egress via sidecars) are possible and are explicitly left open for future exploration.
+2. Two routing modes: Endpoint (direct) and Parent (gateway chaining).
+3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
+4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
+
+## Open Design Questions
+
+### Gateway Resource
+
+**Preferred Approach: Reuse Gateway API Gateway**
+- Leverage existing `Gateway`, `HTTPRoute`, and `GRPCRoute` resources
+- HTTPRoute references to external backends make it an egress gateway
+- Requires Backend resource to represent external destinations
+
+**Alternative Considered: New EgressGateway Resource**
+- Introduce dedicated `EgressGateway` resource type
+- Enables egress-specific fields (e.g., global CIDR allow-lists) without policy attachment overhead
+- Clearer separation of ingress vs egress concerns
+
+**Cons**
+- Implies defining equivalents of parentRefs, listeners, and route attachment.
+
+**Alternative Considered: Mesh Resource**
+- Use a `Mesh`-style resource to express egress policies attached to sidecars, as implemented by some service meshes (for example, [Linkerd’s egress configuration](https://linkerd.io/2-edge/reference/egress-network/)).
+- Allows egress to be expressed at the data-plane level without the need for a Gateway instance.
+
+This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude Mesh-based egress models in future work.
+
+### Backend Resource and Policy Application
+
+Policies will be added to each `Backend` via `Backend.spec.extensions[]` with clear phases and failure semantics.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1alpha1
+kind: Backend
+metadata:
+  name: openai-backend
+spec:
+  destination:
+    type: FQDN
+    fqdn:
+      hostname: api.openai.com
+      port: 443
+  tls:
+    mode: Terminate | Passthrough | Mutual
+    sni: api.openai.com
+    caBundleRef:
+      name: vendor-ca
+    # clientCertificateRef:  # if MUTUAL
+    #   name: egress-client-cert
+  extensions:
+  - name: inject-credentials
+    type: gateway.networking.k8s.io/CredentialInjector:v1
+    phase: request-headers
+    priority: 10
+    failOpen: false
+    config:
+      secretRef:
+        name: openai-api-key
+        namespace: platform-secrets
+  - name: rate-qos
+    type: gateway.networking.k8s.io/QoSController:v1
+    phase: backend-request
+    priority: 30
+    failOpen: true
+    config:
+      requestsPerMinute: 1000
+```
+
+#### Processor Catalog
+
+A catalog of standard filters/policies will be defined, for example:
+- CredentialInjector
+- QoSController
+
+TODO: decide on a definitive catalog of processors.
+
+Controllers MUST publish the set of supported processor kinds and versions for a GatewayClass via `GatewayClass.status.parametersRef` or an implementation-specific status e.g. `GatewayClass.status.supportedExtensionKinds`.
+
+Admission MUST reject unknown catalog kinds and MAY admit domain-scoped kinds but set status Degraded with reason UnsupportedExtensionType until support is advertised.
+
+#### Processor Extensions
+
+Additional processors may be defined. They MUST declare the following fields:
+
+- phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-headers, response-body}
+- priority: integer. (Lower runs first within the same phase).
+- failOpen: boolean. Default false (closed).
+- preAuth: boolean. Default false. (trusted-peer context unavailable before authorization)
+- config: type-specific opaque object validated against the type's JSONSchema.
+
+Controllers MUST reject processors that declare unsupported phases or invalid schemas.
+Controllers SHOULD reconcile each processor independently, surfacing a `Degraded` status on a per-extension basis (to avoid requeuing entire Backend objects).
+
+#### Processor Config Schema Example
+
+Below is an example of how a config may be defined and made available as a ConfigMap.
+
+**Note:** This example attaches a PII detector at the `Backend` level to illustrate the extension mechanism.
+The appropriate attachment point for a given processor type (Gateway-level policy, `HTTPRoute` filter, `Backend` extension, or Mesh-attached processor) remains an open design question.
 
 
-> **This should be left blank until the "What?" and "Why?" are agreed upon,
-> as defining "How?" the goals are accomplished is not important unless we can
-> first even agree on what the problem is, and why we want to solve it.
->
-> This section is fairly freeform, because (again) these proposals will
-> eventually find there way into any number of different final proposal formats
-> in other projects. However, the general guidance is to break things down into
-> highly focused sections as much as possible to help make things easier to
-> read and review. Long, unbroken walls of code and YAML in this document are
-> not advisable as that may increase the time it takes to review.
+```yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: acme-piidetector-v1-schema
+  namespace: gateway-system
+data:
+  schema.json: |
+    {
+      "$schema": "https://json-schema.org/draft/2020-12/schema",
+      "title": "acme.example.com/PIIDetector:v1 config",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "modelRef": {
+          "type": "string",
+          "minLength": 1,
+          "description": "The PII model to use."
+        },
+        "redactionStyle": {
+          "type": "string",
+          "enum": ["mask", "delete", "hash"],
+          "default": "mask",
+          "description": "How matched PII is transformed"
+        },
+        "confidenceThreshold": {
+          "type": "number",
+          "minimum": 0.0,
+          "maximum": 1.0,
+          "default": 0.6,
+          "description": "Minimum confidence score to redact"
+        },
+        "maxBodyBytes": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 1048576,
+          "description": "Maximum bytes of body this processor will buffer (0 = unlimited per impl)"
+        }
+      },
+      "required": ["modelRef"]
+    }
+```
+
+The controller may then advertise the processor via `GatewayClass.status.supportedExtensionKinds`.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: envoy-gateway
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+status:
+  supportedExtensionKinds:
+  - group: gateway.networking.k8s.io
+    kind: CredentialInjector
+    versions: ["v1"]
+  - group: acme.example.com
+    kind: PIIDetector
+    versions: ["v1"]
+    schemaRefs:
+    - apiVersion: v1
+      kind: ConfigMap
+      name: acme-piidetector-v1-schema
+      namespace: gateway-system
+```
+
+Finally the processor may be attached to a `Backend` as such:
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1alpha1
+kind: Backend
+metadata:
+  name: no-pii-openai
+  namespace: app
+spec:
+  destination:
+    type: FQDN
+    fqdn:
+      hostname: api.openai.com
+      port: 443
+  tls:
+    mode: Mutual
+    sni: api.openai.com
+    caBundleRef:
+      name: vendor-ca
+    # clientCertificateRef:
+    #   name: egress-client-cert
+  extensions:
+  - name: pii-detector
+    type: acme.example.com/PIIDetector:v1
+    phase: request-body
+    priority: 20
+    failOpen: false
+    preAuth: true
+    config:
+      modelRef: pii-detect-small
+      redactionStyle: delete
+      confidenceThreshold: 0.7
+      maxBodyBytes: 2097152
+```
+
+#### Phases
+
+Phases are always evaluated in the following order:
+
+1. request-headers
+2. request-body
+3. connect
+4. backend-request
+5. backend-response
+6. response-headers
+7. response-body
+
+Authn/authz and rate limiting execute before `request-body` and later phases unless a processor is explicitly marked preAuth: true.
+Implementations MUST prevent processors marked preAuth from accessing trusted-peer context.
+
+## Routing Modes
+
+### Endpoint Mode
+Client traffic flows through the egress gateway directly to an external endpoint (FQDN or IP). The gateway applies policies and routing logic before forwarding to the destination.
+
+### Parent Mode
+Client traffic flows through a local egress gateway to an upstream gateway before reaching the final endpoint. This enables gateway chaining for multi-cluster or multi-zone topologies. The local egress gateway treats the parent as a single upstream. Local retries are limited to establishing the parent connection. Request-level retries are performed by the parent.
+
+Operators MUST use network policy or sidecar/egress proxy configuration to deny direct egress from workloads and force all outbound traffic to the Gateway.
+Retry loops across gateways are prohibited; implementations MUST tag requests to prevent looped retries.
+
+## Policy Application Scopes
+
+Policies must be applicable at three levels:
+
+1. **Gateway-level**: Global rules affecting all traffic (e.g., cluster-wide CIDR restrictions, denied model lists)
+2. **Route-level**: Per-request logic via filters `HTTPRoute.rules[].filters[ExtensionRef]` (e.g., payload transforms, compliance checks)
+3. **Backend-level**: credentials, TLS, DNS, rate/QoS via `Backend.extensions` or backend-targeted policies.
+
+### Conflict Resolution
+When multiple policies influence the same request:
+- **Specificity precedence**: Route > Backend > Gateway.
+- **Same-level ties**: Implementations MUST use a deterministic tie-break where the oldest resource (based on `metadata.creationTimestamp`) wins, and surface status indicating the conflict.
+
+Implementations MUST apply this ordering to ensure consistent behavior.
+
+## AI Workload Considerations
+
+For inference and agentic workloads, the solution must support:
+
+- **[Payload Processing](../7-payload-processing.md)**: Request/response transformations (PII redaction, prompt injection detection, content filtering)
+  - note: Evaluation of payload processors occurs in the data plane; controllers reconcile objects into proxy configuration.
+- **Protocol Support**: HTTP/gRPC for inference APIs, with future consideration for MCP and A2A protocols
+- **Multi-destination Routing**: Failover between cloud providers and cross-cluster endpoints
+
+## Observability Considerations
+
+- Implementations MUST expose metrics tagged by `{gateway, route, backend, namespace, serviceAccount}` and surface conditions (e.g., `Accepted`, `Programmed`, `Degraded`).
+- Denials and transform failures MUST emit Events.
+
+## Next Steps
+
+1. Define Backend resource schema.
+2. Specify default Backend policies e.g. CredentialInjector and QoSController.
+3. Specify filter extension points for payload processing.
+4. Align with multi-cluster and agentic networking proposals.
+5. Prototype this design in at least one implementation to validate `Backend` vs `Route` vs Mesh placement and refine the API surface based on real-world usage.
 
 # Additional Criteria
 
