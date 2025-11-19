@@ -107,7 +107,7 @@ This proposal aims to provide egress gateway capabilities by defining:
 - HTTPRoute references to external backends make it an egress gateway
 - Requires Backend resource to represent external destinations
 
-**Alternatives Considered: New EgressGateway Resource**
+**Alternative Considered: New EgressGateway Resource**
 - Introduce dedicated `EgressGateway` resource type
 - Enables egress-specific fields (e.g., global CIDR allow-lists) without policy attachment overhead
 - Clearer separation of ingress vs egress concerns
