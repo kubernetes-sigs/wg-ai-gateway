@@ -90,13 +90,21 @@ ingress use case.
 
 ## Overview
 
-This proposal aims to provide egress gateway capabilities by defining:
+### Reverse-Proxy Egress Model
+
+This proposal focuses on a reverse-proxy egress model, where destinations are explicitly configured. It aims to define:
 
 1. Resource model using Gateway + HTTPRoute with an additional resource (e.g. `Backend`) for destinations (Service or FQDN).
     - Other resource models (e.g., Mesh-attached egress via sidecars) are possible and are explicitly left open for future exploration.
 2. Two routing modes: Endpoint (direct) and Parent (gateway chaining).
 3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
 4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
+
+### Forward-Proxy Egress Model (Future Work)
+
+Another egress pattern is a dynamic forward-proxy model, where the egress gateway accepts requests to arbitrary external hostnames rather than routing only to a fixed set of Backends.
+
+This document does not define a forward-proxy API. We may explore a complementary forward-proxy design in a follow-up proposal or subsection.
 
 ## Open Design Questions
 
