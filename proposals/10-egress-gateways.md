@@ -123,7 +123,11 @@ This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, 
 
 ### Backend Resource and Policy Application
 
-Policies will be added to each `Backend` via `Backend.spec.extensions[]` with clear phases and failure semantics.
+Backends provide a first-class way to describe external destinations (for example, FQDNs) and the connection policy needed to reach them.
+
+Implementations MAY also allow Backends to reference additional egress-related extensions for concerns such as credential injection or QoS,
+but the detailed semantics of those extensions are out of scope for this proposal.
+
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1alpha1
@@ -143,6 +147,7 @@ spec:
       name: vendor-ca
     # clientCertificateRef:  # if MUTUAL
     #   name: egress-client-cert
+  # possible extension semantics, for illustration purposes only.
   extensions:
   - name: inject-credentials
     type: gateway.networking.k8s.io/CredentialInjector:v1
@@ -153,164 +158,14 @@ spec:
       secretRef:
         name: openai-api-key
         namespace: platform-secrets
-  - name: rate-qos
-    type: gateway.networking.k8s.io/QoSController:v1
-    phase: backend-request
-    priority: 30
-    failOpen: true
-    config:
-      requestsPerMinute: 1000
 ```
 
-#### Processor Catalog
+#### Backend Extensions
 
-A catalog of standard filters/policies will be defined, for example:
-- CredentialInjector
-- QoSController
+Backends MAY reference extension processors via `spec.extensions[]`. This proposal does **not** define processor semantics, catalogs, schema validation, or execution ordering.
+Those topics are covered in the separate  **[Payload Processing proposal](../7-payload-processing.md)** and will be refined independently of the egress routing model.
 
-TODO: decide on a definitive catalog of processors.
-
-Controllers MUST publish the set of supported processor kinds and versions for a GatewayClass via `GatewayClass.status.parametersRef` or an implementation-specific status e.g. `GatewayClass.status.supportedExtensionKinds`.
-
-Admission MUST reject unknown catalog kinds and MAY admit domain-scoped kinds but set status Degraded with reason UnsupportedExtensionType until support is advertised.
-
-#### Processor Extensions
-
-Additional processors may be defined. They MUST declare the following fields:
-
-- phase: one of {request-headers, request-body, connect, backend-request, backend-response, response-headers, response-body}
-- priority: integer. (Lower runs first within the same phase).
-- failOpen: boolean. Default false (closed).
-- preAuth: boolean. Default false. (trusted-peer context unavailable before authorization)
-- config: type-specific opaque object validated against the type's JSONSchema.
-
-Controllers MUST reject processors that declare unsupported phases or invalid schemas.
-Controllers SHOULD reconcile each processor independently, surfacing a `Degraded` status on a per-extension basis (to avoid requeuing entire Backend objects).
-
-#### Processor Config Schema Example
-
-Below is an example of how a config may be defined and made available as a ConfigMap.
-
-**Note:** This example attaches a PII detector at the `Backend` level to illustrate the extension mechanism.
-The appropriate attachment point for a given processor type (Gateway-level policy, `HTTPRoute` filter, `Backend` extension, or Mesh-attached processor) remains an open design question.
-
-
-```yaml
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: acme-piidetector-v1-schema
-  namespace: gateway-system
-data:
-  schema.json: |
-    {
-      "$schema": "https://json-schema.org/draft/2020-12/schema",
-      "title": "acme.example.com/PIIDetector:v1 config",
-      "type": "object",
-      "additionalProperties": false,
-      "properties": {
-        "modelRef": {
-          "type": "string",
-          "minLength": 1,
-          "description": "The PII model to use."
-        },
-        "redactionStyle": {
-          "type": "string",
-          "enum": ["mask", "delete", "hash"],
-          "default": "mask",
-          "description": "How matched PII is transformed"
-        },
-        "confidenceThreshold": {
-          "type": "number",
-          "minimum": 0.0,
-          "maximum": 1.0,
-          "default": 0.6,
-          "description": "Minimum confidence score to redact"
-        },
-        "maxBodyBytes": {
-          "type": "integer",
-          "minimum": 0,
-          "default": 1048576,
-          "description": "Maximum bytes of body this processor will buffer (0 = unlimited per impl)"
-        }
-      },
-      "required": ["modelRef"]
-    }
-```
-
-The controller may then advertise the processor via `GatewayClass.status.supportedExtensionKinds`.
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1
-kind: GatewayClass
-metadata:
-  name: envoy-gateway
-spec:
-  controllerName: gateway.envoyproxy.io/gatewayclass-controller
-status:
-  supportedExtensionKinds:
-  - group: gateway.networking.k8s.io
-    kind: CredentialInjector
-    versions: ["v1"]
-  - group: acme.example.com
-    kind: PIIDetector
-    versions: ["v1"]
-    schemaRefs:
-    - apiVersion: v1
-      kind: ConfigMap
-      name: acme-piidetector-v1-schema
-      namespace: gateway-system
-```
-
-Finally the processor may be attached to a `Backend` as such:
-
-```yaml
-apiVersion: gateway.networking.k8s.io/v1alpha1
-kind: Backend
-metadata:
-  name: no-pii-openai
-  namespace: app
-spec:
-  destination:
-    type: FQDN
-    fqdn:
-      hostname: api.openai.com
-      port: 443
-  tls:
-    mode: Mutual
-    sni: api.openai.com
-    caBundleRef:
-      name: vendor-ca
-    # clientCertificateRef:
-    #   name: egress-client-cert
-  extensions:
-  - name: pii-detector
-    type: acme.example.com/PIIDetector:v1
-    phase: request-body
-    priority: 20
-    failOpen: false
-    preAuth: true
-    config:
-      modelRef: pii-detect-small
-      redactionStyle: delete
-      confidenceThreshold: 0.7
-      maxBodyBytes: 2097152
-```
-
-#### Phases
-
-Phases are always evaluated in the following order:
-
-1. request-headers
-2. request-body
-3. connect
-4. backend-request
-5. backend-response
-6. response-headers
-7. response-body
-
-Authn/authz and rate limiting execute before `request-body` and later phases unless a processor is explicitly marked preAuth: true.
-Implementations MUST prevent processors marked preAuth from accessing trusted-peer context.
+Examples in this document are illustrative only.
 
 ## Routing Modes
 
