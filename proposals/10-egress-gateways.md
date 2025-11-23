@@ -160,6 +160,15 @@ spec:
         namespace: platform-secrets
 ```
 
+#### TLS Policy
+
+The example above inlines a basic TLS configuration directly on the Backend resource. This is intentional.
+Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends.
+
+Using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid.
+
+As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external egress use cases.
+
 #### Backend Extensions
 
 Backends MAY reference extension processors via `spec.extensions[]`. This proposal does **not** define processor semantics, catalogs, schema validation, or execution ordering.
