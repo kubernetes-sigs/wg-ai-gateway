@@ -132,8 +132,8 @@ and if not, document it as an alternative considered.
 **Cons**
 - Implies defining equivalents of parentRefs, listeners, and route attachment.
 
-**Alternative Considered: Mesh Resource**
-- Use a `Mesh`-style resource to express egress policies attached to sidecars, as implemented by some service meshes (for example, [Linkerd’s egress configuration](https://linkerd.io/2-edge/reference/egress-network/)).
+**Alternative Considered: Egress Definition Resource**
+- Use a new resource to define which requests should be considered egress traffic, in order to express egress policies independently of the egress gateway. This follows the model used by some service meshes (for example, [Linkerd’s EgressNetwork resource](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)).
 - Allows egress to be expressed at the data-plane level without the need for a Gateway instance.
 
 This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude Mesh-based egress models in future work.
