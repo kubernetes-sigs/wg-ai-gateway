@@ -106,6 +106,15 @@ Another egress pattern is a dynamic forward-proxy model, where the egress gatewa
 
 This document does not define a forward-proxy API. We may explore a complementary forward-proxy design in a follow-up proposal or subsection.
 
+### Network Egress Model (Needs Discussion)
+
+Some precedent exists throughout the community for egress which is supported at a network level.
+
+Prime examples include Linkerd (which supports BOTH `Gateway`, and network level (effectively `Mesh` level),
+and OVN-Kubernetes (`EgressRoute`).
+
+TODO: We need to analyze this use case and decide if it needs coverage from this proposal as well,
+and if not, document it as an alternative considered.
 ## Open Design Questions
 
 ### Gateway Resource
