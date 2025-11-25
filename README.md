@@ -29,6 +29,14 @@ have so far. If you'd like to submit a new proposal, please contact us in one of
 our communication channels to get some feedback and identify potential 
 supporters for your proposal in the community who can help move it forward with you.
 
+### Prototypes
+
+You can create prototypes for any of our proposals, however to avoid confusion
+keep these in a separate branch and don't merge to `main`. This allows us to
+collaborate and share, without creating any confusion of there being code in
+`main` and that somehow being construed as something that should be used in other
+projects.
+
 ## Community, discussion, contribution, and support
 
 Our community meetings are held on Monday/Thursday ([Calendar](https://www.kubernetes.dev/resources/calendar/), [Meeting Notes](https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs)).
