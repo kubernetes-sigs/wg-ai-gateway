@@ -100,6 +100,18 @@ This proposal focuses on a reverse-proxy egress model, where destinations are ex
 3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
 4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
 
+#### Backend Placement 
+
+This proposal uses the following resource relationship:
+```
+Gateway <-[parentRef] HTTPRoute -[backendRef]-> Backend
+```
+
+Backend just represents some external destination. Today, we're typically achieving egress via a synthetic Service, and this proposal aims for Backend to replace the Service in that equation.
+
+Service doesn't need to know about a gateway, and similarly, we shouldn't attach Backend to a particular Gateway since multiple Gateways might use the same Backend. It does make sense for a route, since they translate directly into the configuration of a particular Gateway.
+
+
 ### Forward-Proxy Egress Model (Future Work)
 
 Another egress pattern is a dynamic forward-proxy model, where the egress gateway accepts requests to arbitrary external hostnames rather than routing only to a fixed set of Backends.
