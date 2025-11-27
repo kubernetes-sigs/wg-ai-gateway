@@ -104,13 +104,11 @@ This proposal focuses on a reverse-proxy egress model, where destinations are ex
 
 This proposal uses the following resource relationship:
 ```
-Gateway <-[parentRef] HTTPRoute -[backendRef]-> Backend
+Gateway <-[parentRef]- HTTPRoute -[backendRef]-> Backend
 ```
+A `Backend` represents an external destination. Today, egress is typically achieved via a synthetic `Service`; this proposal instead uses `Backend` to represent that destination directly.
 
-Backend just represents some external destination. Today, we're typically achieving egress via a synthetic Service, and this proposal aims for Backend to replace the Service in that equation.
-
-Service doesn't need to know about a gateway, and similarly, we shouldn't attach Backend to a particular Gateway since multiple Gateways might use the same Backend. It does make sense for a route, since they translate directly into the configuration of a particular Gateway.
-
+A `Service` does not need to know about a `Gateway`, and likewise this proposal does not attach `Backend` to a particular `Gateway`. A single `Backend` may be referenced by multiple `HTTPRoute` objects and consumed by multiple Gateways. In contrast, `HTTPRoute` does attach to specific Gateways via `parentRef`, since it represents configuration that is scoped to a particular Gateway.
 
 ### Forward-Proxy Egress Model (Future Work)
 
@@ -218,16 +216,16 @@ Retry loops across gateways are prohibited; implementations MUST tag requests to
 
 ### Workload-to-Gateway Addressing
 
-**Open Questions:**
+**Open Questions**
 
 How do workloads in the cluster address and connect to the egress `Gateway`? Several approaches are under consideration and are **not** specified by this document:
 
-- **Service-wrapped Gateway**: Wrap the Gateway in a Service to obtain a `.cluster.local` FQDN. Works today but requires a synthetic Service.
-- **Direct Gateway addressing**: Allow Gateways to obtain `.cluster.local` addresses directly (would require decomposing Service DNS capabilities).
-- **Service as HTTPRoute parentRef**: For mesh implementations, use `Service` as a `parentRef` to reroute traffic through a Gateway.
-- **Simplified frontend resource**: A lighter-weight resource that maps `.cluster.local` FQDNs directly to Backends without requiring full `Gateway` + `HTTPRoute` configuration.
+- **Service-wrapped Gateway**: Wrap the `Gateway` in a `Service` to obtain a `.cluster.local` FQDN. This works today but requires a synthetic `Service`.
+- **Direct Gateway addressing**: Allow `Gateway` resources to obtain `.cluster.local` addresses directly (would require decomposing some `Service` DNS capabilities).
+- **Service as `HTTPRoute.parentRef`**: In mesh implementations, use a `Service` as a `parentRef` so traffic destined for that Service is transparently routed through a `Gateway`.
+- **Simplified frontend resource**: A lighter-weight resource that maps `.cluster.local` FQDNs directly to `Backend` objects without requiring a full `Gateway` + `HTTPRoute` configuration.
 
-Additionally, `Backend` could be a good place to define failover priorities between endpoints, which HTTPRoute cannot currently express (it only supports weighted load balancing).
+Additionally, a `Backend` may be a suitable place to define failover priorities between endpoints, which `HTTPRoute` cannot currently express (it only supports weighted load balancing).
 
 ## Policy Application Scopes
 
