@@ -220,7 +220,7 @@ Retry loops across gateways are prohibited; implementations MUST tag requests to
 
 **Open Questions:**
 
-How do workloads in the cluster address and connect to the egress Gateway? Several approaches are under consideration:
+How do workloads in the cluster address and connect to the egress `Gateway`? Several approaches are under consideration and are **not** specified by this document:
 
 - **Service-wrapped Gateway**: Wrap the Gateway in a Service to obtain a `.cluster.local` FQDN. Works today but requires a synthetic Service.
 - **Direct Gateway addressing**: Allow Gateways to obtain `.cluster.local` addresses directly (would require decomposing Service DNS capabilities).
