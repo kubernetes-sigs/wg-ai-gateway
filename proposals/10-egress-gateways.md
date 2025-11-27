@@ -100,7 +100,7 @@ This proposal focuses on a reverse-proxy egress model, where destinations are ex
 3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
 4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
 
-#### Backend Placement 
+#### Backend Placement
 
 This proposal uses the following resource relationship:
 ```
@@ -215,6 +215,19 @@ Client traffic flows through a local egress gateway to an upstream gateway befor
 
 Operators MUST use network policy or sidecar/egress proxy configuration to deny direct egress from workloads and force all outbound traffic to the Gateway.
 Retry loops across gateways are prohibited; implementations MUST tag requests to prevent looped retries.
+
+### Workload-to-Gateway Addressing
+
+**Open Questions:**
+
+How do workloads in the cluster address and connect to the egress Gateway? Several approaches are under consideration:
+
+- **Service-wrapped Gateway**: Wrap the Gateway in a Service to obtain a `.cluster.local` FQDN. Works today but requires a synthetic Service.
+- **Direct Gateway addressing**: Allow Gateways to obtain `.cluster.local` addresses directly (would require decomposing Service DNS capabilities).
+- **Service as HTTPRoute parentRef**: For mesh implementations, use `Service` as a `parentRef` to reroute traffic through a Gateway.
+- **Simplified frontend resource**: A lighter-weight resource that maps `.cluster.local` FQDNs directly to Backends without requiring full `Gateway` + `HTTPRoute` configuration.
+
+Additionally, `Backend` could be a good place to define failover priorities between endpoints, which HTTPRoute cannot currently express (it only supports weighted load balancing).
 
 ## Policy Application Scopes
 
