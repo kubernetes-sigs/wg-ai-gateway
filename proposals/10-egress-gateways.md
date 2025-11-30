@@ -166,15 +166,14 @@ spec:
     type: FQDN
     fqdn:
       hostname: api.openai.com
-      port: 443
-  tls:
-    mode: Terminate | Passthrough | Mutual
-    sni: api.openai.com
-    caBundleRef:
-      name: vendor-ca
-    # clientCertificateRef:  # if MUTUAL
-    #   name: egress-client-cert
-  # possible extension semantics, for illustration purposes only.
+    ports:
+    - number: 443
+      protocol: TLS
+      tls:
+        mode: SIMPLE | MUTUAL | PASSTHROUGH | PLATFORM_PROVIDED | INSECURE_DISABLE
+        sni: api.openai.com
+        caBundleRef:
+          name: vendor-ca
   extensions:
   - name: inject-credentials
     type: gateway.networking.k8s.io/CredentialInjector:v1
@@ -187,14 +186,11 @@ spec:
         namespace: platform-secrets
 ```
 
+
 #### TLS Policy
 
-The example above inlines a basic TLS configuration directly on the Backend resource. This is intentional.
-Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends.
-
-Using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid.
-
-As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external egress use cases.
+The example above inlines a basic TLS configuration directly on the `Backend` resource. This is intentional.
+Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external egress use cases.
 
 #### Backend Extensions
 
@@ -202,6 +198,205 @@ Backends MAY reference extension processors via `spec.extensions[]`. This propos
 Those topics are covered in the separate  **[Payload Processing proposal](../7-payload-processing.md)** and will be refined independently of the egress routing model.
 
 Examples in this document are illustrative only.
+
+#### Scope and Persona Ownership
+
+While the namespaced ownership semantics of Kubernetes `Service`s are well-defined, the story for our proposed `Backend` resource is less clear, specifically for FQDN destinations. The fundamental question at issue is: who "owns" the destination, and what is the appropriate scope for defining it? There are two basic options:
+
+- **Namespaced Backends**: Each namespace defines its own `Backend` resources for the external destinations it needs to reach. This model aligns with existing Kubernetes patterns, where resources are scoped to the namespace of the consuming workload. While this model allows __service owners__ to manage their own backends independently, it may lead to duplication if multiple namespaces need to reach the same external service. Furthermore, it may complicate cross-namespace policy enforcement if, for example, the egress gateway is in a central namespace (e.g. "egress-system") and multiple, disparate namespaces define conflicting `Backend` resources for the same FQDN. In this case, the gateway implementation would have to apply different policy depending on the source namespace of the request which could get combinatorially expensive. It also removes any ability for the cluster admin to centrally manage and audit egress destinations or apply a default set of policies for all egress traffic to said destination.
+
+- **Cluster-scoped Backends**: `Backend` resources are defined at the cluster scope, allowing a single definition per external destination. This model aligns with the idea that __platform operators__ or __cluster admins__ are responsible for managing egress destinations and their associated policies. It simplifies policy enforcement at the gateway level, as there is a single source of truth for each destination. However, it may limit the flexibility of service owners to define custom backends or policies for their specific needs.
+
+Realistically, both models have merit and are widely used across many gateway/mesh implementations. Prior art from the Network Policy subproject (i.e. `AdminNetworkPolicy` vs `NetworkPolicy`) suggests that both cluster-scoped and namespaced resources can coexist to serve different personas and use cases. We should consider whether:
+
+1. Whether `Backend` should be namespaced or cluster-scoped.
+2. Whether we should define both namespaced and cluster-scoped variants of `Backend` (e.g. `GlobalBackend` or `ClusterWideBakcend`)to serve different personas (service owners vs platform operators).
+
+Experience from implementations (e.g. this [discussion on Istio's ServiceEntry resource](https://docs.google.com/document/d/1uDWoWxHyMCE4oUc-nTJPfVoQyikZP-UMp-_BrAA-PQE/edit?tab=t.0)) and user feedback will be critical for informing this decision.
+
+#### Schema Definition
+
+```go
+// +genclient
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// Backend is the Schema for the backends API.
+type Backend struct {
+	metav1.TypeMeta `json:",inline"`
+	// metadata is a standard object metadata.
+	// +optional
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	// spec defines the desired state of Backend.
+	// +required
+	Spec BackendSpec `json:"spec"`
+	// status defines the observed state of Backend.
+	// +optional
+	Status BackendStatus `json:"status,omitempty"`
+}
+
+// BackendSpec defines the desired state of Backend.
+type BackendSpec struct {
+  // destination defines the backend destination to route traffic to.
+  // +required
+  Destination BackendDestination `json:"destination"`
+  // extensions defines optional extension processors that can be applied to this backend.
+  // +optional
+  Extensions []BackendExtension `json:"extensions,omitempty"`
+}
+
+// TODO: Do we need the destination field or can we inline this all
+// in spec?
+// +kubebuilder:validation:ExactlyOneOf=fqdn;service;ip
+type BackendDestination struct {
+  // +required
+  Type BackendType `json:"type"`
+  // +optional
+  Ports []BackendPort `json:"ports,omitempty"`
+  // +optional
+  FQDN *FQDNBackend `json:"fqdn,omitempty"`
+  // Service *ServiceBackend `json:"service,omitempty"`
+  // IP *IPBackend `json:"ip,omitempty"`
+}
+
+// BackendType defines the type of the Backend destination.
+// +kubebuilder:validation:Enum=FQDN;IP;Service
+type BackendType string
+
+const (
+  // FQDN represents a fully qualified domain name.
+  BackendTypeFQDN BackendType = "FQDN"
+  // IP represents an IP address.
+  BackendTypeIP BackendType = "IP"
+  BackendTypeService BackendType = "Service"
+)
+
+type BackendPort struct {
+  // Number defines the port number of the backend.
+  // +required
+  // +kubebuilder:validation:Minimum=1
+  // +kubebuilder:validation:Maximum=65535
+  Number uint32 `json:"number"`
+  // Protocol defines the protocol of the backend.
+  // +required
+  // +kubebuilder:validation:MaxLength=256
+  Protocol BackendProtocol `json:"protocol"`
+  // TLS defines the TLS configuration for the backend.
+  // +optional
+  TLS *BackendTLS `json:"tls,omitempty"`
+  // +optional
+  ProtocolOptions *BackendProtocolOptions `json:"protocolOptions,omitempty"`
+}
+
+// BackendProtocol defines the protocol for backend communication.
+// +kubebuilder:validation:Enum=HTTP;HTTPS;GRPC;TCP;TLS;MCP
+type BackendProtocol string
+
+const (
+  BackendProtocolHTTP BackendProtocol = "HTTP"
+  BackendProtocolHTTPS BackendProtocol = "HTTPS"
+  BackendProtocolGRPC BackendProtocol = "GRPC"
+  BackendProtocolTCP BackendProtocol = "TCP"
+  BackendProtocolTLS BackendProtocol = "TLS"
+  BackendProtocolMCP BackendProtocol = "MCP"
+)
+
+type BackendTLS struct {
+  // Mode defines the TLS mode for the backend.
+  // +required
+  Mode BackendTLSMode `json:"mode"`
+  // SNI defines the server name indication to present to the upstream backend.
+  // +optional
+  SNI string `json:"sni,omitempty"`
+  // CaBundleRef defines the reference to the CA bundle for validating the backend's
+  // certificate.
+  // Defaults to system CAs if not specified.
+  // +optional
+  CaBundleRef []ObjectReference `json:"caBundleRef,omitempty"`
+
+  InsecureSkipVerify *bool `json:"insecureSkipVerify,omitempty"`
+
+  // ClientCertificateRef defines the reference to the client certificate for mutual
+  // TLS. Only used if mode is MUTUAL.
+  // +optional
+  ClientCertificateRef *SecretObjectReference `json:"clientCertificateRef,omitempty"`
+
+  SubjectAltNames []string `json:"subjectAltNames,omitempty"`
+}
+
+// BackendTLSMode defines the TLS mode for backend connections.
+// +kubebuilder:validation:Enum=SIMPLE;MUTUAL;PASSTHROUGH;PLATFORM_PROVIDED;INSECURE_DISABLE
+type BackendTLSMode string
+
+const (
+  // Enable TLS with simple server certificate verification.
+  BackendTLSModeSIMPLE BackendTLSMode = "SIMPLE"
+  // Enable mutual TLS.
+  BackendTLSModeMUTUAL BackendTLSMode = "MUTUAL"
+  // Don't terminate TLS, use SNI to route.
+  BackendTLSModePASSTHROUGH BackendTLSMode = "PASSTHROUGH"
+  // Use implementation's built-in TLS (e.g. service mesh powered mTLS).
+  BackendTLSModePLATFORM_PROVIDED BackendTLSMode = "PLATFORM_PROVIDED"
+  // Disable TLS.
+  BackendTLSModeINSECURE_DISABLE BackendTLSMode = "INSECURE_DISABLE"
+)
+
+// +kubebuilder:validation:ExactlyOneOf=mcp
+type BackendProtocolOptions struct {
+  // +optional
+  MCP *MCPProtocolOptions `json:"mcp,omitempty"`
+}
+
+type MCPProtocolOptions struct {
+  // MCP protocol version. MUST be one of V2|V3.
+  // +optional
+  // +kubebuilder:validation:MaxLength=256
+  Version string `json:"version,omitempty"`
+  // URL path for MCP traffic. Default is /mcp.
+  // +optional
+  // +kubebuilder:default:=/mcp
+  Path string `json:"path,omitempty"`
+}
+
+// FQDNBackend describes a backend that exists outside of the cluster.
+// Hostnames must not be cluster.local domains or otherwise refer to
+// Kubernetes services within a cluster. Implementations must report
+// violations of this requirement in status.
+type FQDNBackend struct {
+  // Hostname of the backend service. Examples: "api.example.com"
+  // +required
+  Hostname string `json:"hostname"`
+}
+
+type BackendExtension struct {
+  // +required
+  Name string `json:"name"`
+  // +required
+  Type string `json:"type"`
+  // TODO: How does this work practically? Can we leverage Kubernetes unstructured types here?
+  // Would implementations have to define a schema for their extensions (even if they aren't CRDs)?
+  // Maybe that's a good thing?
+  Config any `json:"config,omitempty"`
+}
+
+// BackendStatus defines the observed state of Backend.
+type BackendStatus struct {
+	// For Kubernetes API conventions, see:
+	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+	// conditions represent the current state of the Backend resource.
+	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
+	//
+	// Standard condition types include:
+	// - "Available": the resource is fully functional
+	// - "Progressing": the resource is being created or updated
+	// - "Degraded": the resource failed to reach or maintain its desired state
+	//
+	// The status of each condition is one of True, False, or Unknown.
+	// +listType=map
+	// +listMapKey=type
+	// +optional
+	Conditions []metav1.Condition `json:"conditions,omitempty"`
+}
+```
 
 ## Routing Modes
 
