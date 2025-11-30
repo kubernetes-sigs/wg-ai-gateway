@@ -56,6 +56,15 @@ payload processing is not standardized in Kubernetes today.
    * I want predictable ordering of all payload processing steps to ensure
      safe and consistent runtime behavior.
 
+* As a developer of Agentic AI platforms:
+
+  * I need the ability to process the payload of ModelContextProtocol (MCP)
+    requests to make routing and security decisions.
+
+  * I want to set or modify request headers based on payload attributes so that
+    the system can look up a session header from a store (by tool) and route the
+    request to the correct backend MCP server.
+
 * As a security engineer, I want to be able to add a detection engine which
   scans requests to identify malicious or anomalous request payloads and
   block, sanitize, and/or report them before they reach backends.
@@ -98,7 +107,65 @@ payload processing is not standardized in Kubernetes today.
 
 # How?
 
-TODO in a later PR.
+This proposal is meant to drive towards multiple outcomes and engagements with
+the SIGs:
+
+1. A proposal for "Payload Processors" in SIG Network, via [Gateway API].
+2. Development of example "GuardRails" extensions using Payload Processing
+   (e.g. prompt guards). SIG Security (and potentially some LLM security
+   specialists) will be engaged for review to get any concerns or insights they
+   can provide.
+3. (possibly, to be discussed further) a proposal to re-implement the existing
+   Body-Based Router (BBR) in the [Gateway API Inference Extension (GIE)] using
+   the standardized mechanisms.
+4. (possibly, to be discussed further) a connection with the existing Gateway
+   API [Firewall GEP].
+
+[Gateway API]:https://github.com/kubernetes-sigs/gateway-api
+[Gateway API Inference Extension (GIE)]:https://github.com/kubernetes-sigs/gateway-api-inference-extension
+[Firewall GEP]:https://github.com/kubernetes-sigs/gateway-api/issues/3614
+
+## Gateway API - Payload Processors
+
+The following is a proposal for [Gateway API] to enable "Payload Processing"
+within its API surface (`Gateway`, `HTTPRoute`, etc). The overview includes
+high level concepts and technical requirements as derived from our user
+stories and the implementation entation details include examples to illustrate
+how this would work (but are not intended to be new APIs that we actually
+propose).
+
+[Gateway API]:https://github.com/kubernetes-sigs/gateway-api
+
+### Overview
+
+> **WIP**: this will be updated iteratively across multiple PRs.
+
+Requirements:
+
+* **Declarative**: The administrator of a `Gateway` or `HTTPRoute` needs to be
+  able to add
+  payload processors declaratively, as part of the route definition.
+* **Ordered**: Each specified payload processor needs to be able to be
+  optionally executed by the
+  Gateway API implementation in the order it was configured.
+* **Abundancy**: A route needs to be able to configure a potentially very large
+  number of payload processors.
+* **Routing**: Some payload processors may trigger routing to a specific
+  backend (e.g. semantic routing, semantic caching). This optional routing may
+  only trigger conditionally.
+* **Constraints**: Payload processors can have constraints and limitations
+  applied (e.g. latency timeout)
+* **Failure Modes**: Payload processors need to have configurable failure modes
+  which determine what happens if the extension fails during processing.
+* **Payload Influences Headers**: Payload processors need to be able to modify
+  and set headers based on information in the payload (e.g. session
+  information).
+* **Rejection**: Payload processors need to be able to reject requests,
+   _and_ responses (e.g. PII detected in response)
+
+### Implementation Details
+
+TODO: in a later PR.
 
 > This should be left blank until the "What?" and "Why?" are agreed upon,
 > as defining "How?" the goals are accomplished is not important unless we can
