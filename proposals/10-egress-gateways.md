@@ -259,15 +259,16 @@ type BackendDestination struct {
 }
 
 // BackendType defines the type of the Backend destination.
-// +kubebuilder:validation:Enum=FQDN;IP;Service
+// +kubebuilder:validation:Enum=Fqdn;Ip;KubernetesService
 type BackendType string
 
 const (
-  // FQDN represents a fully qualified domain name.
-  BackendTypeFQDN BackendType = "FQDN"
-  // IP represents an IP address.
-  BackendTypeIP BackendType = "IP"
-  BackendTypeService BackendType = "Service"
+  // Fqdn represents a fully qualified domain name.
+  BackendTypeFqdn BackendType = "Fqdn"
+  // Ip represents an IP address.
+  BackendTypeIp BackendType = "Ip"
+  // KubernetesService represents a Kubernetes Service.
+  BackendTypeKubernetesService BackendType = "KubernetesService"
 )
 
 type BackendPort struct {
@@ -288,16 +289,14 @@ type BackendPort struct {
 }
 
 // BackendProtocol defines the protocol for backend communication.
-// +kubebuilder:validation:Enum=HTTP;HTTPS;GRPC;TCP;TLS;MCP
+// +kubebuilder:validation:Enum=HTTP;HTTP2;TCP;MCP
 type BackendProtocol string
 
 const (
-  BackendProtocolHTTP BackendProtocol = "HTTP"
-  BackendProtocolHTTPS BackendProtocol = "HTTPS"
-  BackendProtocolGRPC BackendProtocol = "GRPC"
-  BackendProtocolTCP BackendProtocol = "TCP"
-  BackendProtocolTLS BackendProtocol = "TLS"
-  BackendProtocolMCP BackendProtocol = "MCP"
+  BackendProtocolHTTP  BackendProtocol = "HTTP"
+  BackendProtocolHTTP2 BackendProtocol = "HTTP2"
+  BackendProtocolTCP   BackendProtocol = "TCP"
+  BackendProtocolMCP   BackendProtocol = "MCP"
 )
 
 type BackendTLS struct {
@@ -324,20 +323,20 @@ type BackendTLS struct {
 }
 
 // BackendTLSMode defines the TLS mode for backend connections.
-// +kubebuilder:validation:Enum=SIMPLE;MUTUAL;PASSTHROUGH;PLATFORM_PROVIDED;INSECURE_DISABLE
+// +kubebuilder:validation:Enum=Simple;Mutual;Passthrough;PlatformProvided;InsecureDisable
 type BackendTLSMode string
 
 const (
   // Enable TLS with simple server certificate verification.
-  BackendTLSModeSIMPLE BackendTLSMode = "SIMPLE"
+  BackendTLSModeSimple BackendTLSMode = "Simple"
   // Enable mutual TLS.
-  BackendTLSModeMUTUAL BackendTLSMode = "MUTUAL"
+  BackendTLSModeMutual BackendTLSMode = "Mutual"
   // Don't terminate TLS, use SNI to route.
-  BackendTLSModePASSTHROUGH BackendTLSMode = "PASSTHROUGH"
+  BackendTLSModePassthrough BackendTLSMode = "Passthrough"
   // Use implementation's built-in TLS (e.g. service mesh powered mTLS).
-  BackendTLSModePLATFORM_PROVIDED BackendTLSMode = "PLATFORM_PROVIDED"
+  BackendTLSModePlatformProvided BackendTLSMode = "PlatformProvided"
   // Disable TLS.
-  BackendTLSModeINSECURE_DISABLE BackendTLSMode = "INSECURE_DISABLE"
+  BackendTLSModeInsecureDisable BackendTLSMode = "InsecureDisable"
 )
 
 // +kubebuilder:validation:ExactlyOneOf=mcp
