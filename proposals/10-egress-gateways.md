@@ -282,6 +282,11 @@ proposal complete and ready to move out to other areas.
 [GIE's multi-cluster proposal]:https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/1374-multi-cluster-inference
 [proposal for external MCP/A2A]:https://docs.google.com/document/d/17kA-78gq25BgS2ElHMCd-zy__9clVL-GZQcHCm52854/edit?tab=t.0
 
+# Prior Art
+
+TODO: add information about existing egress implementations here that can help
+us to refine our user stories, goals and implementation.
+
 # Relevant Links
 
 * [Istio's implementation of Egress Gateways](https://istio.io/latest/docs/tasks/traffic-management/egress/egress-gateway/)
