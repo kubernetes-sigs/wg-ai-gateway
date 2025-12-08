@@ -190,7 +190,7 @@ spec:
 #### TLS Policy
 
 The example above inlines a basic TLS configuration directly on the `Backend` resource. This is intentional.
-Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external egress use cases.
+Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. `BackendTLSPolicy` also doesn't allow setting client certificates per backend; only once at the `Gateway`. This is overly restrictive for external FQDNs; no one "owns" a particular FQDN and can speak authoritatively about how every service in the cluster should talk to it. Generally speaking, the TLS field within `Backend` is meant to describe the TLS configuration that a client should use when talking to a backend. As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external FQDN egress use cases.
 
 #### Backend Extensions
 
@@ -281,7 +281,7 @@ type BackendPort struct {
   // +required
   // +kubebuilder:validation:MaxLength=256
   Protocol BackendProtocol `json:"protocol"`
-  // TLS defines the TLS configuration for the backend.
+  // TLS defines the TLS configuration that a client should use when talking to the backend.
   // +optional
   TLS *BackendTLS `json:"tls,omitempty"`
   // +optional
