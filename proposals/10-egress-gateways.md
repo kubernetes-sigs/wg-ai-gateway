@@ -346,7 +346,8 @@ type BackendProtocolOptions struct {
 }
 
 type MCPProtocolOptions struct {
-  // MCP protocol version. MUST be one of V2|V3.
+  // MCP protocol version. MUST be a valid MCP version string
+  // per the project's strategy: https://modelcontextprotocol.io/specification/versioning
   // +optional
   // +kubebuilder:validation:MaxLength=256
   Version string `json:"version,omitempty"`
