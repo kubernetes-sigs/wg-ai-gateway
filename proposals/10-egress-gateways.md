@@ -223,15 +223,15 @@ Experience from implementations (e.g. this [discussion on Istio's ServiceEntry r
 // Backend is the Schema for the backends API.
 type Backend struct {
 	metav1.TypeMeta `json:",inline"`
-	// metadata is a standard object metadata.
-	// +optional
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	// spec defines the desired state of Backend.
-	// +required
-	Spec BackendSpec `json:"spec"`
-	// status defines the observed state of Backend.
-	// +optional
-	Status BackendStatus `json:"status,omitempty"`
+    // metadata is a standard object metadata.
+    // +optional
+    metav1.ObjectMeta `json:"metadata,omitempty"`
+    // spec defines the desired state of Backend.
+    // +required
+    Spec BackendSpec `json:"spec"`
+    // status defines the observed state of Backend.
+    // +optional
+    Status BackendStatus `json:"status,omitempty"`
 }
 
 // BackendSpec defines the desired state of Backend.
