@@ -1,6 +1,6 @@
 # Egress Gateways
 
-* Authors: @shaneutt @usize
+* Authors: @shaneutt @usize @keithmattix 
 * Status: Proposed
 
 # What?
