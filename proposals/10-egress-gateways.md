@@ -233,10 +233,21 @@ Things get murkier for `Backend`s of type `KubernetesService`. Despite the reaso
 
 #### Backend Extensions
 
-Backends MAY reference extension processors via `spec.extensions[]`. This proposal does **not** define processor semantics, catalogs, schema validation, or execution ordering.
-Those topics are covered in the separate  **[Payload Processing proposal](../7-payload-processing.md)** and will be refined independently of the egress routing model.
+Backends MAY reference extension processors via `spec.extensions[]`. This proposal does **not** define processor semantics, catalogs, schema validation, or execution ordering. The details of those topics are covered in the separate  **[Payload Processing proposal](../7-payload-processing.md)** and will be refined independently of the egress routing model. However, it is worth discussing the semantics of these egress extensions at a high level.
 
-Examples in this document are illustrative only.
+Fundamentally, there are 3 options for where extension processors can be applied in the egress flow:
+
+1. **Route-level**: Extensions are applied as filters on the `HTTPRoute`, affecting individual requests as they are routed to a `Backend`.
+2. **Backend-level**: Extensions are applied at the `Backend`, affecting all requests sent to that destination. Note that because multiple `Backend`s can point to the same destination (e.g. FQDN or `Service`), users may encounter unexpected behavior if different `Backend`s define conflicting extensions for the same destination (on different routes for example).
+3. **Policy attachment**: Extensions are applied as policies attached to the `Backend` resource.
+
+The key difference between both options 1 and 2 vs. option 3 really boils down to an even higher-level question of filters vs. policies in Gateway API. We won't attempt to define a broad rule in this proposal, but we will align with the outcome of that discussion.
+
+Digging more deeply into option 1 vs. option 2, there are, of course, tradeoffs to consider. Route-level extensions provide more granular control, allowing different routes to apply different processors to the same `Backend`. This is useful when different consumers have different requirements for how they interact with the same destination. However, it may lead to duplication (if multiple routes need to apply the same processor to the same `Backend`) or accidental misconfigurations (if users forget to apply a necessary processor on a route). Backend-level extensions provide a centralized way to manage processors for a given `Backend` resource. This is useful when there are common requirements for how all consumers should interact with a destination. However, it may limit flexibility if different routes need different processors for the same `Backend`. To navigate these tradeoffs, I believe we must answer one fundamental question: how would we distinguish between extensions available on the `HTTPRoute` vs those available on the `Backend`? Would they be the same set of extensions, or would some extensions only make sense at one level or the other? For example, would a payload transformer (e.g. PII redaction) make sense at the `Backend` level, or is that inherently a per-request concern that belongs on the `HTTPRoute`? Conversely, would a rate limiter make sense at the `HTTPRoute` level, or is that inherently a per-destination concern that belongs on the `Backend`?
+
+If we deicde that they are the same set of extensions (just applied with different granularity), then we must decide whether both levels are necessary. If, on the other hand, we want to separate some extensions to be `Backend`-only, then we must define clear distinctions between not just route vs. backend extensions, but also whether or not there is a need for a third type: frontend extensions (especially in the mesh case where there may not be a `Gateway` or explicit route).
+
+__(Note: All examples of extensions in this document are illustrative only)__
 
 #### Scope and Persona Ownership
 
