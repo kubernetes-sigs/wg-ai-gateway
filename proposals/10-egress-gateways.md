@@ -1,6 +1,6 @@
 # Egress Gateways
 
-* Authors: @shaneutt @usize @keithmattix 
+* Authors: @shaneutt @usize @keithmattix
 * Status: Proposed
 
 # What?
@@ -146,11 +146,12 @@ and if not, document it as an alternative considered.
 - Use a new resource to define which requests should be considered egress traffic, in order to express egress policies independently of the egress gateway. This follows the model used by some service meshes (for example, [Linkerd’s EgressNetwork resource](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)).
 - Allows egress to be expressed at the data-plane level without the need for a Gateway instance.
 
+
 This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude Mesh-based egress models in future work.
 
 ### Backend Resource and Policy Application
 
-Backends provide a first-class way to describe external destinations (for example, FQDNs) and the connection policy needed to reach them.
+`Backend`s provide a first-class way to describe external destinations (for example, FQDNs) and the connection policy needed to reach them.
 
 Implementations MAY also allow Backends to reference additional egress-related extensions for concerns such as credential injection or QoS,
 but the detailed semantics of those extensions are out of scope for this proposal.
@@ -186,11 +187,49 @@ spec:
         namespace: platform-secrets
 ```
 
+#### Producer vs. Consumer Role
+
+In the context of egress routing, the `Backend` resource always represents the **consumer** side of the connection. Regardless of whether or not the `Backend` is defined in the same namespace as the route sending traffic to it (or the Gateway hosting that route), the `Backend` describes how the client (i.e. the egress gateway) should connect to a service outside of the cluster. Therefore, it's a consumer resource.
+
+There is, however, an open question about what the appropriate role for `Backend`s of type `KubernetesService`. If a `Backend` points to a Service within the same cluster, is it still a consumer resource (describing how the gateway should connect to that Service), or is it a producer resource (describing how the Service expects clients to connect to it)? This question is important because it influences how we think about policy application and ownership semantics for `Backend`s. I propose that we treat all `Backend`s as consumer resources for the sake of consistency and simplicity. This means that even if a `Backend` points to a `Service` within its same namespace, it still describes how the gateway should connect to that Service from a client perspective. This approach has the added benefit of allowing different namespaces to define their own `Backend` resources for the same Service, each with potentially different connection policies (e.g. TLS settings, extensions) without ReferenceGrant. This aligns with the idea that different consumers may have different requirements for how they connect to the same service.
+
+One consequence of this approach is that `Backend` is not a suitable target for any producer-side policies (e.g. authorization or authentication). This is difficult to enforce at the API level ([GEP-713](https://gateway-api.sigs.k8s.io/geps/gep-713/) for policy attachment does not specify categories distinguishing producer vs consumer), so implementations MUST consider `Backend` only as a consumer when attaching policies to it.
+
 
 #### TLS Policy
 
 The example above inlines a basic TLS configuration directly on the `Backend` resource. This is intentional.
-Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. `BackendTLSPolicy` also doesn't allow setting client certificates per backend; only once at the `Gateway`. This is overly restrictive for external FQDNs; no one "owns" a particular FQDN and can speak authoritatively about how every service in the cluster should talk to it. Generally speaking, the TLS field within `Backend` is meant to describe the TLS configuration that a client should use when talking to a backend. As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external FQDN egress use cases.
+Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. `BackendTLSPolicy` also doesn't allow setting client certificates per backend; only once at `Gateway.spec.tls.backend`. This is overly restrictive for external FQDNs; no one "owns" a particular FQDN and can speak authoritatively about how every service in the cluster should talk to it. Generally speaking, the TLS field within `Backend` is meant to describe the TLS configuration that a client should use when talking to a backend. As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external FQDN egress use cases.
+
+##### A note on the evolution of TLS within Gateway API
+
+Today, the TLS story in Gateway API is [fractured](https://gateway-api.sigs.k8s.io/guides/tls/):
+- `Gateway.spec.listeners[].tls` defines general TLS settings for incoming connections (Standard)
+  - Defines how to handle all TLS traffic to that listener(e.g. terminate it, pass it through)
+- `Gateway.spec.tls` defines mTLS settings for the entire Gateway (Experimental)
+  - the `backend` field describes how the Gateway should connect to backends
+    - Specifically, it allows setting client certificates for mutual TLS
+  - the `frontend` field allows defining the validation context that should be used for incoming connections
+    - Used to validate the client certificate in mTLS scenarios
+- `TLSRoute` allows users to specify how TLS should be handled on a per-route basis (Experimental)
+  - Most useful for SNI-based routing in passthrough scenarios
+- `BackendTLSPolicy` allows users to define TLS settings when connecting to backends (Standard)
+  - Specifically, validation context for the server certificates presented by upstream backends.
+  - Also allows setting SNI for backend connections.
+
+The proposed `Backend` resource introduces yet another place to define TLS settings, and there is certainly a cost to further fragmenting the TLS story. At minimum, I believe an additional configuration point is needed for the egress gateway story simply because there is no standard egress story in Kubernetes. `Service` type `ExternalName` is the closest analogue, however, many organizations shy away from it completely due to cross-namespace security risks. Furthermore, naive usage of `ExternalName` can easily break SNI and TLS because the HTTP Host/:authority header will point to the cluster-internal FQDN rather than the external hostname. Clients would have to manually override the Host header and SNI or (or try to use `BackendTLSPolicy` to set SNI but I think you still have the Host header problem). The `Backend` resource allows us to define a clear and unambiguous way to represent external FQDNs and how to connect to them securely.
+
+Things get murkier for `Backend`s of type `KubernetesService`. Despite the reasons for inline policy mentioned above, there is a strong argument for reusing `BackendTLSPolicy` here to avoid duplication and user confusion. Perhaps there should be a separate resource for `ExternalFQDN` backends that allows inline TLS, while `KubernetesService` backends reuse `BackendTLSPolicy`? Or maybe there should be another field within backend to mark a destination as being external (regardless of whether it's an FQDN or an IP)? We should certainly revisit those alternatives if we hit a wall in pursuing the current direction. In the interest of exploring this proposal fully and the cohesiveness of TLS within Gateway APi as a whole, I propoes the following guidelines for TLS policy:
+
+1. `Gateway.spec.listeners[].tls` remains the source of truth for incoming TLS connections to the Gateway.
+2. `Gateway.spec.tls.backend` is removed in favor of the `Backend` resource's TLS field
+    1. `Gateway.spec.tls.frontend` remains for gateway-wide mTLS validation of incoming connections.
+3. `Backend` is explicitly disallowed as a targetRef for `BackendTLSPolicy`
+4. We pursue aligning `BackendTLSPolicy` and `Backend.spec.tls` as closely as possible w.r.t types.
+    1. There may be different semantics or defaults for different types of backends (FQDN vs Service) or resources (BackendTLSPolicy), but the shape should be as similar as possible to avoid user confusion.
+    2. In the short term, if you don't need mTLS, users should prefer `BackendTLSPolicy` for Kubernetes services.
+    3. We can revisit this recommendation as `Backend` and other decompositions of `Service` evolve.
+5. `TLSRoute` retains its current role as the way to express per-route TLS handling (e.g. SNI routing in passthrough mode).
 
 #### Backend Extensions
 
@@ -212,7 +251,7 @@ Realistically, both models have merit and are widely used across many gateway/me
 1. Whether `Backend` should be namespaced or cluster-scoped.
 2. Whether we should define both namespaced and cluster-scoped variants of `Backend` (e.g. `GlobalBackend` or `ClusterWideBakcend`)to serve different personas (service owners vs platform operators).
 
-Experience from implementations (e.g. this [discussion on Istio's ServiceEntry resource](https://docs.google.com/document/d/1uDWoWxHyMCE4oUc-nTJPfVoQyikZP-UMp-_BrAA-PQE/edit?tab=t.0)) and user feedback will be critical for informing this decision.
+After multiple discussions, I am currently proposing making `Backend` a namespaced resource. This aligns with the idea of `Backend` being a consumer resource, where each namespace can define its own backends independently. One of the realizations that led me to this conclusion is that many of the admin use-cases for having a cluster-scoped `Backend` for external FQDNs can be reframed as making the cluster-admin the "service owner" of a (hypothetical) cluster-wide `Frontend` concept/resource. In other words, the cluser-admin would potentially be able to define a `Frontend` that represents a specific external service (e.g. *.openai.com) and configure TLS and other policies (authentication and authorization) that ensure clients are connecting to that `Frontend` in the way they expect (e.g. using certain certificates, with a proper SNI being set, etc). This `Frontend` could even have an optional `parentRef` to an egress gateway that, when combined with a `NetworkPolicy` enforces that all traffic to that or any `Frontend` must go through the egress gateway. While this entire flow is hypothetical and not in scope for this proposal, it does illustrate that cluster-scoped `Backend`s may not be strictly necessary to achieve the admin use-cases we are trying to solve for.
 
 #### Schema Definition
 
@@ -282,6 +321,8 @@ type BackendPort struct {
   // +kubebuilder:validation:MaxLength=256
   Protocol BackendProtocol `json:"protocol"`
   // TLS defines the TLS configuration that a client should use when talking to the backend.
+  // TODO: To prevent duplication on the part of the user, maybe this should be declared once at the
+  // top level with per-port overrides?
   // +optional
   TLS *BackendTLS `json:"tls,omitempty"`
   // +optional
@@ -398,6 +439,7 @@ type BackendStatus struct {
 }
 ```
 
+
 ## Routing Modes
 
 ### Endpoint Mode
@@ -450,6 +492,13 @@ For inference and agentic workloads, the solution must support:
 
 - Implementations MUST expose metrics tagged by `{gateway, route, backend, namespace, serviceAccount}` and surface conditions (e.g., `Accepted`, `Programmed`, `Degraded`).
 - Denials and transform failures MUST emit Events.
+
+## Service Mesh Considerations
+- Often no Gateway resource centralizing the application of the policy or configuration
+- Meshes may often trade off stronger namespace-oriented tenenacy in favor of ease-of-configuration
+- `Backend` MAY be used as a routing target within a mesh (without a Gateway), but such usage is considered implementation-specific at this time and may be broken later.
+    - If implemented this way, it is strongly encouraged that the `Backend`'s configuration only applies to clients in the same namespace as the `Backend` resource to avoid cross-namespace policy conflicts.
+    - Mesh implementations should consider proposing a cluster-wide `Backend` resource OR a `backendSelector` capability on a future `Frontend` resource to ease cross-namespace, cluster-wide usage.
 
 ## Next Steps
 
