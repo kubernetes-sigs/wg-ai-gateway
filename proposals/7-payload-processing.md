@@ -1,6 +1,6 @@
 # Payload Processing
 
-* Authors: @shaneutt, @kflynn
+* Authors: @shaneutt, @kflynn, @shachartal 
 * Status: Proposed
 
 # What?
@@ -220,10 +220,10 @@ metadata:
   name: prompt-injection-protection
 spec:
   # Sequence of processors
-  rules:
+  processor:
   - name: malicious-prompt-prevention
     # Indicates if this processor rule can mutate passed data
-    mutating: true
+    allowMutating: true
     # Determines which parts of the request/response pair is of interest to the processor
     phases: ["request-headers", "request-body", "response-headers", "response-body"]
     # Defines the callout type, in this case it is backed by a service hosted on the cluster
