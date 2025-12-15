@@ -511,6 +511,10 @@ For inference and agentic workloads, the solution must support:
     - If implemented this way, it is strongly encouraged that the `Backend`'s configuration only applies to clients in the same namespace as the `Backend` resource to avoid cross-namespace policy conflicts.
     - Mesh implementations should consider proposing a cluster-wide `Backend` resource OR a `backendSelector` capability on a future `Frontend` resource to ease cross-namespace, cluster-wide usage.
 
+## What about BackendTrafficPolicy?
+
+Inlining TLS is discussed at length above, but a similar conversation should be had for the fields that current live in `BackendTrafficPolicy`, such as connection timeouts, retries, and load balancing. This is less pressing since `BackendTrafficPolicy` is still experimental, but we should decide whether or not we need both `BackendTrafficPolicy` and `Backend` or if we can consolidate them.
+
 ## Next Steps
 
 1. Define Backend resource schema.
