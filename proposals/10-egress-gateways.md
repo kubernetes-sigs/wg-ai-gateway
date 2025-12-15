@@ -171,7 +171,7 @@ spec:
     - number: 443
       protocol: TLS
       tls:
-        mode: SIMPLE | MUTUAL | PASSTHROUGH | PLATFORM_PROVIDED | INSECURE_DISABLE
+        mode: None | Simple | Mutual | InsecureDisable
         sni: api.openai.com
         caBundleRef:
           name: vendor-ca
@@ -273,7 +273,7 @@ After multiple discussions, I am currently proposing making `Backend` a namespac
 // +kubebuilder:subresource:status
 // Backend is the Schema for the backends API.
 type Backend struct {
-	metav1.TypeMeta `json:",inline"`
+  metav1.TypeMeta `json:",inline"`
     // metadata is a standard object metadata.
     // +optional
     metav1.ObjectMeta `json:"metadata,omitempty"`
@@ -376,19 +376,20 @@ type BackendTLS struct {
 }
 
 // BackendTLSMode defines the TLS mode for backend connections.
-// +kubebuilder:validation:Enum=Simple;Mutual;Passthrough;PlatformProvided;InsecureDisable
+// +kubebuilder:validation:Enum=Simple;Mutual
 type BackendTLSMode string
 
 const (
+  // Do not modify or configure TLS. If your platform (or service mesh)
+  // transparently handles TLS, use this mode.
+  BackendTLSModeDisable BackendTLSMode = "None"
   // Enable TLS with simple server certificate verification.
   BackendTLSModeSimple BackendTLSMode = "Simple"
   // Enable mutual TLS.
   BackendTLSModeMutual BackendTLSMode = "Mutual"
-  // Don't terminate TLS, use SNI to route.
-  BackendTLSModePassthrough BackendTLSMode = "Passthrough"
-  // Use implementation's built-in TLS (e.g. service mesh powered mTLS).
-  BackendTLSModePlatformProvided BackendTLSMode = "PlatformProvided"
-  // Disable TLS.
+  // Explicitly do not use TLS for this connection.
+  // If the platform (e.g. service mesh) reads Backend
+  // it MUST NOT do its regular TLS handling for this connection.
   BackendTLSModeInsecureDisable BackendTLSMode = "InsecureDisable"
 )
 
@@ -425,29 +426,53 @@ type BackendExtension struct {
   Name string `json:"name"`
   // +required
   Type string `json:"type"`
-  // TODO: How does this work practically? Can we leverage Kubernetes unstructured types here?
-  // Would implementations have to define a schema for their extensions (even if they aren't CRDs)?
-  // Maybe that's a good thing?
-  Config any `json:"config,omitempty"`
+  // +optional
+  // +kubebuilder:validation:Type=object
+  // +kubebuilder:pruning:PreserveUnknownFields
+  RawConfig *apiextensionsv1.JSON `json:"rawConfig,omitempty"`
 }
 
 // BackendStatus defines the observed state of Backend.
 type BackendStatus struct {
-    // For Kubernetes API conventions, see:
-    // https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-    // conditions represent the current state of the Backend resource.
-    // Each condition has a unique type and reflects the status of a specific aspect of the resource.
-    //
-    // Standard condition types include:
-    // - "Available": the resource is fully functional
-    // - "Progressing": the resource is being created or updated
-    // - "Degraded": the resource failed to reach or maintain its desired state
-    //
-    // The status of each condition is one of True, False, or Unknown.
-    // +listType=map
-    // +listMapKey=type
-    // +optional
-    Conditions []metav1.Condition `json:"conditions,omitempty"`
+  // Controllers is a list of controllers that are responsible for managing the InferencePoolImport.
+  //
+  // +listType=map
+  // +listMapKey=name
+  // +kubebuilder:validation:MaxItems=8
+  // +kubebuilder:validation:Required
+  Controllers []BackendControllerStatus `json:"controllers"`
+}
+
+type BackendControllerStatus struct {
+  // Name is a domain/path string that indicates the name of the controller that manages the
+  // InferencePoolImport. Name corresponds to the GatewayClass controllerName field when the
+  // controller will manage parents of type "Gateway". Otherwise, the name is implementation-specific.
+  //
+  // Example: "example.net/import-controller".
+  //
+  // The format of this field is DOMAIN "/" PATH, where DOMAIN and PATH are valid Kubernetes
+  // names (https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names).
+  //
+  // A controller MUST populate this field when writing status and ensure that entries to status
+  // populated with their controller name are removed when they are no longer necessary.
+  //
+  // +required
+  Name ControllerName `json:"name"`
+  // For Kubernetes API conventions, see:
+  // https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
+  // conditions represent the current state of the Backend resource.
+  // Each condition has a unique type and reflects the status of a specific aspect of the resource.
+  //
+  // Standard condition types include:
+  // - "Available": the resource is fully functional
+  // - "Progressing": the resource is being created or updated
+  // - "Degraded": the resource failed to reach or maintain its desired state
+  //
+  // The status of each condition is one of True, False, or Unknown.
+  // +listType=map
+  // +listMapKey=type
+  // +optional
+  Conditions []metav1.Condition `json:"conditions,omitempty"`
 }
 ```
 
