@@ -215,7 +215,8 @@ Today, the TLS story in Gateway API is [fractured](https://gateway-api.sigs.k8s.
   - Most useful for SNI-based routing in passthrough scenarios
 - `BackendTLSPolicy` allows users to define TLS settings when connecting to backends (Standard)
   - Specifically, validation context for the server certificates presented by upstream backends.
-  - Also allows setting SNI for backend connections.
+  - Allows setting SNI for backend connections.
+  - Allows defining SANs.
 
 The proposed `Backend` resource introduces yet another place to define TLS settings, and there is certainly a cost to further fragmenting the TLS story. At minimum, I believe an additional configuration point is needed for the egress gateway story simply because there is no standard egress story in Kubernetes. `Service` type `ExternalName` is the closest analogue, however, many organizations shy away from it completely due to cross-namespace security risks. Furthermore, naive usage of `ExternalName` can easily break SNI and TLS because the HTTP Host/:authority header will point to the cluster-internal FQDN rather than the external hostname. Clients would have to manually override the Host header and SNI or (or try to use `BackendTLSPolicy` to set SNI but I think you still have the Host header problem). The `Backend` resource allows us to define a clear and unambiguous way to represent external FQDNs and how to connect to them securely.
 
