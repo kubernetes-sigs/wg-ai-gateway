@@ -171,7 +171,7 @@ spec:
     - number: 443
       protocol: TLS
       tls:
-        mode: None | Simple | Mutual | InsecureDisable
+        mode: None | Simple | Mutual
         sni: api.openai.com
         caBundleRef:
           name: vendor-ca
@@ -376,21 +376,17 @@ type BackendTLS struct {
 }
 
 // BackendTLSMode defines the TLS mode for backend connections.
-// +kubebuilder:validation:Enum=Simple;Mutual
+// +kubebuilder:validation:Enum=Simple;Mutual;None
 type BackendTLSMode string
 
 const (
   // Do not modify or configure TLS. If your platform (or service mesh)
   // transparently handles TLS, use this mode.
-  BackendTLSModeDisable BackendTLSMode = "None"
+  BackendTLSModeNone BackendTLSMode = "None"
   // Enable TLS with simple server certificate verification.
   BackendTLSModeSimple BackendTLSMode = "Simple"
   // Enable mutual TLS.
   BackendTLSModeMutual BackendTLSMode = "Mutual"
-  // Explicitly do not use TLS for this connection.
-  // If the platform (e.g. service mesh) reads Backend
-  // it MUST NOT do its regular TLS handling for this connection.
-  BackendTLSModeInsecureDisable BackendTLSMode = "InsecureDisable"
 )
 
 // +kubebuilder:validation:ExactlyOneOf=mcp
