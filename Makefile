@@ -48,6 +48,22 @@ test: vet;$(info $(M)...Begin to run tests.)  @ ## Run tests.
 verify:
 	hack/verify-all.sh -v
 
+# Build the controller binary
+.PHONY: build
+build: ;$(info $(M)...Building controller binary.) @ ## Build the controller binary.
+	go build -o bin/controller ./cmd/main.go
+
+# Run the controller locally
+.PHONY: run
+run: build ;$(info $(M)...Running controller locally.) @ ## Run the controller locally.
+	./bin/controller
+
+# Install dependencies
+.PHONY: deps
+deps: ;$(info $(M)...Installing dependencies.) @ ## Install dependencies.
+	go mod download
+	go mod tidy
+
 REPO_ROOT:=${CURDIR}
 
 ## @ Code Generation Variables

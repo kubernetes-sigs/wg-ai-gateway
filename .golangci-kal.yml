@@ -4,6 +4,13 @@ linters:
   enable:
     - kubeapilinter
   settings:
+    lll:
+      line-length: 160
+      tab-width: 1
+    misspell:
+      locale: US
+      ignore-rules:
+        - cancelled
     custom:
       kubeapilinter:
         type: module
