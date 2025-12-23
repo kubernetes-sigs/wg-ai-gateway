@@ -22,7 +22,6 @@ import (
 	runtimeutil "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
-	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
 	appsv1listers "k8s.io/client-go/listers/apps/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
@@ -44,6 +43,7 @@ type patcher func(gvr schema.GroupVersionResource, name string, namespace string
 
 type Deployer interface {
 	Deploy(ctx context.Context) error
+	NodeID() string
 }
 
 type listers struct {
@@ -63,17 +63,26 @@ type deployer struct {
 	namespace  string
 }
 
-func NewDeployer(kubeClient kubernetes.Interface, dynamicClient dynamic.Interface, informers kubeinformers.SharedInformerFactory, gateway *gatewayv1.Gateway, image string) Deployer {
+func NewDeployer(
+	kubeClient kubernetes.Interface,
+	dynamicClient dynamic.Interface,
+	gateway *gatewayv1.Gateway,
+	image string,
+	configMapLister corev1listers.ConfigMapLister,
+	serviceAccountLister corev1listers.ServiceAccountLister,
+	serviceLister corev1listers.ServiceLister,
+	deploymentLister appsv1listers.DeploymentLister,
+) Deployer {
 	return &deployer{
 		gateway:   gateway,
 		nodeID:    generateNodeID(gateway.Namespace, gateway.Name),
 		image:     image,
 		namespace: gateway.Namespace,
 		listers: &listers{
-			configMapLister:      informers.Core().V1().ConfigMaps().Lister(),
-			serviceAccountLister: informers.Core().V1().ServiceAccounts().Lister(),
-			serviceLister:        informers.Core().V1().Services().Lister(),
-			deploymentLister:     informers.Apps().V1().Deployments().Lister(),
+			configMapLister:      configMapLister,
+			serviceAccountLister: serviceAccountLister,
+			serviceLister:        serviceLister,
+			deploymentLister:     deploymentLister,
 		},
 		patcher: func(gvr schema.GroupVersionResource, name string, namespace string, data []byte, subresources ...string) error {
 			c := dynamicClient.Resource(gvr).Namespace(namespace)
@@ -94,6 +103,10 @@ func generateNodeID(namespace, name string) string {
 	}
 	hash := sha256.Sum256([]byte(namespacedName.String()))
 	return fmt.Sprintf(constants.ProxyNameFormat, hex.EncodeToString(hash[:6]))
+}
+
+func (d *deployer) NodeID() string {
+	return d.nodeID
 }
 
 func (d *deployer) Deploy(ctx context.Context) error {

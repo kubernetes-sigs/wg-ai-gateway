@@ -94,6 +94,7 @@ func main() {
 	// Pass the envoy xDS server to the AI Gateway controller
 	// so that the latter can notify the former about config changes.
 	controller, err := controllers.NewController(
+		ctx,
 		envoyProxyImage,
 		kubeClient,
 		dynamicClient,
@@ -102,7 +103,6 @@ func main() {
 		kubeInformerFactory,
 		gatewayInformerFactory,
 		aigatewayInformerFactory,
-		ctx.Done(),
 	)
 	if err != nil {
 		fatal(&logger, err, "unable to create controller")

@@ -14,12 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Inspired by the kgateway CNCF project: https://github.com/kgateway-dev/kgateway/blob/main/pkg/kgateway/setup/controlplane.go#L93
-
 package envoy
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"math"
@@ -30,8 +29,10 @@ import (
 	envoy_service_endpoint_v3 "github.com/envoyproxy/go-control-plane/envoy/service/endpoint/v3"
 	envoy_service_listener_v3 "github.com/envoyproxy/go-control-plane/envoy/service/listener/v3"
 	envoy_service_route_v3 "github.com/envoyproxy/go-control-plane/envoy/service/route/v3"
+	envoyproxytypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	envoycache "github.com/envoyproxy/go-control-plane/pkg/cache/v3"
 	envoylog "github.com/envoyproxy/go-control-plane/pkg/log"
+	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	xdsserver "github.com/envoyproxy/go-control-plane/pkg/server/v3"
 	grpc_middleware "github.com/grpc-ecosystem/go-grpc-middleware"
 	grpc_zap "github.com/grpc-ecosystem/go-grpc-middleware/logging/zap"
@@ -43,7 +44,8 @@ import (
 )
 
 type ControlPlane interface {
-	PushXDS()
+	PushXDS(context.Context, string, map[resourcev3.Type][]envoyproxytypes.Resource) error
+	Run(context.Context) error
 }
 
 type controlPlane struct {
@@ -145,5 +147,7 @@ func (cp *controlPlane) Run(ctx context.Context) error {
 	return nil
 }
 
-// TODO:
-func (cp *controlPlane) PushXDS() {}
+// TODO: Take the xDS resources and update the snapshot cache properly so they are pushed to the appropriate envoy proxies (based on the node ID)
+func (cp *controlPlane) PushXDS(ctx context.Context, nodeID string, resources map[resourcev3.Type][]envoyproxytypes.Resource) error {
+	return errors.New("TODO: implement PushXDS")
+}

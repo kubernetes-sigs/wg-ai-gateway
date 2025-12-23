@@ -23,11 +23,13 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/dynamic"
 	kubeinformers "k8s.io/client-go/informers"
 	"k8s.io/client-go/kubernetes"
+	appv1listers "k8s.io/client-go/listers/apps/v1"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
@@ -39,6 +41,9 @@ import (
 	aigatewayclientset "sigs.k8s.io/wg-ai-gateway/k8s/client/clientset/versioned"
 	aigatewayinformers "sigs.k8s.io/wg-ai-gateway/k8s/client/informers/externalversions"
 	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/k8s/client/listers/api/v0alpha0"
+	envoydeployer "sigs.k8s.io/wg-ai-gateway/pkg/deployer/envoy"
+	envoytranslator "sigs.k8s.io/wg-ai-gateway/pkg/translator/envoy"
+	envoycontrolplane "sigs.k8s.io/wg-ai-gateway/pkg/xds/envoy"
 )
 
 const (
@@ -51,11 +56,16 @@ type Controller interface {
 }
 
 type coreResources struct {
-	client kubernetes.Interface
+	client        kubernetes.Interface
+	dynamicClient dynamic.Interface
 
-	nsLister     corev1listers.NamespaceLister
-	svcLister    corev1listers.ServiceLister
-	secretLister corev1listers.SecretLister
+	nsLister             corev1listers.NamespaceLister
+	svcLister            corev1listers.ServiceLister
+	secretLister         corev1listers.SecretLister
+	configMapLister      corev1listers.ConfigMapLister
+	serviceAccountLister corev1listers.ServiceAccountLister
+	deploymentLister     appv1listers.DeploymentLister
+	serviceLister        corev1listers.ServiceLister
 }
 
 type gatewayResources struct {
@@ -80,10 +90,13 @@ type controller struct {
 	gatewayqueue    workqueue.TypedRateLimitingInterface[string]
 	envoyProxyImage string
 	syncers         []cache.InformerSynced
+	controlplane    envoycontrolplane.ControlPlane
+	translator      envoytranslator.Translator
 	stop            <-chan struct{}
 }
 
 func NewController(
+	ctx context.Context,
 	envoyProxyImage string,
 	kubeClient kubernetes.Interface,
 	dynamicClient dynamic.Interface,
@@ -92,14 +105,18 @@ func NewController(
 	kubeInformerFactory kubeinformers.SharedInformerFactory,
 	gatewayInformerFactory gatewayinformers.SharedInformerFactory,
 	aigatewayInformerFactory aigatewayinformers.SharedInformerFactory,
-	stop <-chan struct{},
 ) (Controller, error) {
 	c := &controller{
 		core: &coreResources{
-			client:       kubeClient,
-			nsLister:     kubeInformerFactory.Core().V1().Namespaces().Lister(),
-			svcLister:    kubeInformerFactory.Core().V1().Services().Lister(),
-			secretLister: kubeInformerFactory.Core().V1().Secrets().Lister(),
+			client:               kubeClient,
+			dynamicClient:        dynamicClient,
+			nsLister:             kubeInformerFactory.Core().V1().Namespaces().Lister(),
+			svcLister:            kubeInformerFactory.Core().V1().Services().Lister(),
+			secretLister:         kubeInformerFactory.Core().V1().Secrets().Lister(),
+			configMapLister:      kubeInformerFactory.Core().V1().ConfigMaps().Lister(),
+			serviceAccountLister: kubeInformerFactory.Core().V1().ServiceAccounts().Lister(),
+			deploymentLister:     kubeInformerFactory.Apps().V1().Deployments().Lister(),
+			serviceLister:        kubeInformerFactory.Core().V1().Services().Lister(),
 		},
 		gateway: &gatewayResources{
 			client:             gatewayClient,
@@ -111,11 +128,22 @@ func NewController(
 			client:        aigatewayClient,
 			backendLister: aigatewayInformerFactory.Ainetworking().V0alpha0().Backends().Lister(),
 		},
-		stop:            stop,
+		stop:            ctx.Done(),
 		envoyProxyImage: envoyProxyImage,
 		gatewayqueue: workqueue.NewTypedRateLimitingQueueWithConfig(
 			workqueue.DefaultTypedControllerRateLimiter[string](),
 			workqueue.TypedRateLimitingQueueConfig[string]{Name: "gateway"},
+		),
+		controlplane: envoycontrolplane.NewControlPlane(ctx),
+		translator: envoytranslator.New(
+			kubeClient,
+			gatewayClient,
+			kubeInformerFactory.Core().V1().Namespaces().Lister(),
+			kubeInformerFactory.Core().V1().Services().Lister(),
+			kubeInformerFactory.Core().V1().Secrets().Lister(),
+			gatewayInformerFactory.Gateway().V1().Gateways().Lister(),
+			gatewayInformerFactory.Gateway().V1().HTTPRoutes().Lister(),
+			aigatewayInformerFactory.Ainetworking().V0alpha0().Backends().Lister(),
 		),
 	}
 
@@ -140,6 +168,12 @@ func NewController(
 func (c *controller) Run(ctx context.Context) error {
 	defer runtime.HandleCrashWithContext(ctx)
 	defer c.gatewayqueue.ShutDown()
+
+	// Note: control plane Run() is non-blocking so it's
+	// safe to run in this goroutine
+	if err := c.controlplane.Run(ctx); err != nil {
+		return fmt.Errorf("failed to start xDS server: %w", err)
+	}
 
 	if ok := cache.WaitForCacheSync(ctx.Done(), c.syncers...); !ok {
 		return errors.New("failed to wait for caches to sync")
@@ -197,10 +231,43 @@ func (c *controller) syncHandler(ctx context.Context, key string) error {
 	if err != nil {
 		if apierrors.IsNotFound(err) {
 			logger.Info("Gateway deleted, cleaning up associated resources.")
-			return envoy.DeleteProxy(ctx, c.core.client, namespace, name)
+			return envoydeployer.DeleteGatewayInfra(ctx, c.core.client, types.NamespacedName{Namespace: namespace, Name: name})
 		}
 		return err
 	}
 
 	logger.Info("Syncing gateway")
+
+	deployer := envoydeployer.NewDeployer(
+		c.core.client,
+		c.core.dynamicClient,
+		gateway,
+		c.envoyProxyImage,
+		c.core.configMapLister,
+		c.core.serviceAccountLister,
+		c.core.serviceLister,
+		c.core.deploymentLister,
+	)
+	if err := deployer.Deploy(ctx); err != nil {
+		return fmt.Errorf("failed to deploy gateway infrastructure: %w", err)
+	}
+
+	logger.Info("Reconciled gateway successfully")
+
+	// Translate Gateway to xDS resources.
+	resources, err := c.translator.TranslateGatewayAndReferencesToXDS(ctx, gateway)
+	if err != nil {
+		// TODO: Update Gateway status with the error.
+		return fmt.Errorf("failed to translate gateway to xDS resources: %w", err)
+	}
+
+	logger.Info("Translated gateway to xDS resources")
+
+	// Update the xDS server with the new resources.
+	if err := c.controlplane.PushXDS(ctx, deployer.NodeID(), resources); err != nil {
+		return fmt.Errorf("failed to update xDS server: %w", err)
+	}
+
+	logger.Info("Updated xDS server with new resources", "nodeID", deployer.NodeID())
+	return nil
 }
