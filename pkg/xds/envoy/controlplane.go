@@ -18,11 +18,13 @@ package envoy
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"log/slog"
 	"math"
 	"net"
+	"strconv"
+	"sync"
+	"sync/atomic"
 
 	envoy_service_cluster_v3 "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
 	envoy_service_discovery_v3 "github.com/envoyproxy/go-control-plane/envoy/service/discovery/v3"
@@ -51,6 +53,10 @@ type ControlPlane interface {
 type controlPlane struct {
 	server xdsserver.Server
 	cache  envoycache.SnapshotCache
+	// versionCounter is used to generate monotonically increasing version numbers for snapshots
+	versionCounter atomic.Uint64
+	// versionMutex protects access to version operations (though atomic is used, this provides extra safety)
+	versionMutex sync.Mutex
 }
 
 // slogAdapterForEnvoy adapts *slog.Logger to envoylog.Logger interface
@@ -147,7 +153,36 @@ func (cp *controlPlane) Run(ctx context.Context) error {
 	return nil
 }
 
-// TODO: Take the xDS resources and update the snapshot cache properly so they are pushed to the appropriate envoy proxies (based on the node ID)
+// PushXDS takes the xDS resources and updates the snapshot cache so they are pushed to the appropriate envoy proxies (based on the node ID).
 func (cp *controlPlane) PushXDS(ctx context.Context, nodeID string, resources map[resourcev3.Type][]envoyproxytypes.Resource) error {
-	return errors.New("TODO: implement PushXDS")
+	if nodeID == "" {
+		return fmt.Errorf("nodeID cannot be empty")
+	}
+
+	// Generate a new version for this snapshot
+	// Versions must be distinct and monotonically increasing for proper xDS updates
+	version := strconv.FormatUint(cp.versionCounter.Add(1), 10)
+
+	// Create a new snapshot with the provided resources
+	snapshot, err := envoycache.NewSnapshot(version, resources)
+	if err != nil {
+		return fmt.Errorf("failed to create snapshot for node %s: %w", nodeID, err)
+	}
+
+	// Validate that the snapshot is internally consistent
+	if err := snapshot.Consistent(); err != nil {
+		return fmt.Errorf("snapshot for node %s is not consistent: %w", nodeID, err)
+	}
+
+	// Update the cache with the new snapshot for this node
+	if err := cp.cache.SetSnapshot(ctx, nodeID, snapshot); err != nil {
+		return fmt.Errorf("failed to set snapshot for node %s: %w", nodeID, err)
+	}
+
+	slog.Info("Updated xDS snapshot",
+		"nodeID", nodeID,
+		"version", version,
+		"resourceTypes", len(resources))
+
+	return nil
 }
