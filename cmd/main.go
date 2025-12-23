@@ -24,29 +24,32 @@ import (
 	"syscall"
 	"time"
 
-	"istio.io/istio/pkg/kube"
-	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
-	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/dynamic"
+	kubeinformers "k8s.io/client-go/informers"
+	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/klog/v2"
+	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
+	gatewayinformers "sigs.k8s.io/gateway-api/pkg/client/informers/externalversions"
 
-	wgaiv0alpha0 "sigs.k8s.io/wg-ai-gateway/api/v0alpha0"
-	"sigs.k8s.io/wg-ai-gateway/pkg/xds/envoy"
+	aigatewayclient "sigs.k8s.io/wg-ai-gateway/k8s/client/clientset/versioned"
+	aigatewayinformers "sigs.k8s.io/wg-ai-gateway/k8s/client/informers/externalversions"
+	"sigs.k8s.io/wg-ai-gateway/pkg/controllers"
 )
 
 var (
-	apiServerURL string
-	kubeconfig   string
-	resyncPeriod time.Duration
+	apiServerURL    string
+	kubeconfig      string
+	resyncPeriod    time.Duration
+	envoyProxyImage string
 )
 
 func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&apiServerURL, "apiserver-url", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
+	flag.StringVar(&envoyProxyImage, "envoy-image", "", "The Envoy proxy image to use for deployed proxies.")
 	flag.DurationVar(&resyncPeriod, "resync-period", 30*time.Second, "Resync period for informers.")
-	// Istio already knows about gateway api, so add our local scheme
-	utilruntime.Must(wgaiv0alpha0.Install(kube.IstioScheme))
 }
 
 func main() {
@@ -57,24 +60,64 @@ func main() {
 	setupSignals(cancel)
 	logger := klog.FromContext(ctx)
 
-	config, err := buildKubeConfig(kubeconfig, apiServerURL)
-	if err != nil {
-		logger.Error(err, "unable to build kubeconfig")
-		os.Exit(1)
+	if envoyProxyImage == "" {
+		fatal(&logger, nil, "--envoy-image cannot be empty")
 	}
 
-	// Create the kube client.
-	kubeClient, err := kube.NewClient(kube.NewClientConfigForRestConfig(config), "Kubernetes")
+	config, err := buildKubeConfig(kubeconfig, apiServerURL)
 	if err != nil {
-		logger.Error(err, "unable to create kube client")
-		os.Exit(1)
+		fatal(&logger, err, "unable to build kubeconfig")
 	}
-	// Generate the Envoy control plane
-	// TODO: Add callbacks and listener
-	cp := envoy.NewControlPlane(ctx, nil, nil)
+
+	// Create all of the clients we'll need
+	kubeClient, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		fatal(&logger, err, "unable to create kubernetes client")
+	}
+	dynamicClient, err := dynamic.NewForConfig(config)
+	if err != nil {
+		fatal(&logger, err, "unable to create dynamic client")
+	}
+	gatewayClient, err := gatewayclient.NewForConfig(config)
+	if err != nil {
+		fatal(&logger, err, "unable to create gateway api client")
+	}
+	aigatewayClient, err := aigatewayclient.NewForConfig(config)
+	if err != nil {
+		fatal(&logger, err, "unable to create ai gateway client")
+	}
+
+	kubeInformerFactory := kubeinformers.NewSharedInformerFactory(kubeClient, resyncPeriod)
+	gatewayInformerFactory := gatewayinformers.NewSharedInformerFactory(gatewayClient, resyncPeriod)
+	aigatewayInformerFactory := aigatewayinformers.NewSharedInformerFactory(aigatewayClient, resyncPeriod)
 
 	// Pass the envoy xDS server to the AI Gateway controller
 	// so that the latter can notify the former about config changes.
+	controller, err := controllers.NewController(
+		envoyProxyImage,
+		kubeClient,
+		dynamicClient,
+		gatewayClient,
+		aigatewayClient,
+		kubeInformerFactory,
+		gatewayInformerFactory,
+		aigatewayInformerFactory,
+		ctx.Done(),
+	)
+	if err != nil {
+		fatal(&logger, err, "unable to create controller")
+	}
+
+	// NOTE: Ensure all informers are registered before starting them
+	// all below
+	kubeInformerFactory.Start(ctx.Done())
+	gatewayInformerFactory.Start(ctx.Done())
+	aigatewayInformerFactory.Start(ctx.Done())
+
+	// Start the controller
+	if err := controller.Run(ctx); err != nil {
+		fatal(&logger, err, "unable to run controller")
+	}
 }
 
 func fatal(l *klog.Logger, err error, msg string) {
@@ -83,7 +126,7 @@ func fatal(l *klog.Logger, err error, msg string) {
 	} else {
 		l.Error(err, msg)
 	}
-	os.Exit(1)
+	klog.FlushAndExit(klog.ExitFlushTimeout, 1)
 }
 
 func buildKubeConfig(kubeconfig, ApiServerURL string) (*rest.Config, error) {

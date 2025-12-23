@@ -38,7 +38,18 @@ import (
 	"go.uber.org/zap"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/reflection"
+	"k8s.io/klog/v2"
+	"sigs.k8s.io/wg-ai-gateway/pkg/constants"
 )
+
+type ControlPlane interface {
+	PushXDS()
+}
+
+type controlPlane struct {
+	server xdsserver.Server
+	cache  envoycache.SnapshotCache
+}
 
 // slogAdapterForEnvoy adapts *slog.Logger to envoylog.Logger interface
 type slogAdapterForEnvoy struct {
@@ -74,11 +85,20 @@ func (s *slogAdapterForEnvoy) Errorf(format string, args ...any) {
 
 func NewControlPlane(
 	ctx context.Context,
-	listener net.Listener,
-	callbacks xdsserver.Callbacks,
-) envoycache.SnapshotCache {
+) ControlPlane {
 	baseLogger := slog.Default().With("component", "envoy-controlplane")
 	envoyLoggerAdapter := &slogAdapterForEnvoy{logger: baseLogger}
+
+	snapshotCache := envoycache.NewSnapshotCache(false, envoycache.IDHash{}, envoyLoggerAdapter)
+	xdsServer := xdsserver.NewServer(ctx, snapshotCache, &callbacks{})
+
+	return &controlPlane{
+		server: xdsServer,
+		cache:  snapshotCache,
+	}
+}
+
+func (cp *controlPlane) Run(ctx context.Context) error {
 	// This is a prototype server, so we don't bother with auth or TLS.
 	opts := []grpc.ServerOption{
 		grpc.MaxRecvMsgSize(math.MaxInt32),
@@ -92,24 +112,27 @@ func NewControlPlane(
 			)),
 	}
 	grpcServer := grpc.NewServer(opts...)
-	snapshotCache := envoycache.NewSnapshotCache(false, envoycache.IDHash{}, envoyLoggerAdapter)
-	xdsServer := xdsserver.NewServer(ctx, snapshotCache, callbacks)
 
 	// Register reflection
 	reflection.Register(grpcServer)
 
 	// Register xDS services
-	envoy_service_endpoint_v3.RegisterEndpointDiscoveryServiceServer(grpcServer, xdsServer)
-	envoy_service_cluster_v3.RegisterClusterDiscoveryServiceServer(grpcServer, xdsServer)
-	envoy_service_route_v3.RegisterRouteDiscoveryServiceServer(grpcServer, xdsServer)
-	envoy_service_listener_v3.RegisterListenerDiscoveryServiceServer(grpcServer, xdsServer)
-	envoy_service_discovery_v3.RegisterAggregatedDiscoveryServiceServer(grpcServer, xdsServer)
+	envoy_service_endpoint_v3.RegisterEndpointDiscoveryServiceServer(grpcServer, cp.server)
+	envoy_service_cluster_v3.RegisterClusterDiscoveryServiceServer(grpcServer, cp.server)
+	envoy_service_route_v3.RegisterRouteDiscoveryServiceServer(grpcServer, cp.server)
+	envoy_service_listener_v3.RegisterListenerDiscoveryServiceServer(grpcServer, cp.server)
+	envoy_service_discovery_v3.RegisterAggregatedDiscoveryServiceServer(grpcServer, cp.server)
+
+	// The xDS server listens on a fixed port (15001) on all interfaces.
+	listener, err := net.Listen("tcp", fmt.Sprintf("0.0.0.0:%d", constants.XDSServerPort))
+	if err != nil {
+		return err
+	}
 
 	// Start the server
 	go func() {
-		err := grpcServer.Serve(listener)
-		if err != nil {
-			baseLogger.Error("Envoy xDS server failed", slog.String("error", err.Error()))
+		if err := grpcServer.Serve(listener); err != nil {
+			klog.Errorln("Envoy xDS server failed:", err)
 		}
 	}()
 
@@ -119,5 +142,8 @@ func NewControlPlane(
 		grpcServer.GracefulStop()
 	}()
 
-	return snapshotCache
+	return nil
 }
+
+// TODO:
+func (cp *controlPlane) PushXDS() {}
