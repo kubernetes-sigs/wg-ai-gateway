@@ -23,7 +23,6 @@ import (
 	"math"
 	"net"
 	"strconv"
-	"sync"
 	"sync/atomic"
 
 	envoy_service_cluster_v3 "github.com/envoyproxy/go-control-plane/envoy/service/cluster/v3"
@@ -55,8 +54,6 @@ type controlPlane struct {
 	cache  envoycache.SnapshotCache
 	// versionCounter is used to generate monotonically increasing version numbers for snapshots
 	versionCounter atomic.Uint64
-	// versionMutex protects access to version operations (though atomic is used, this provides extra safety)
-	versionMutex sync.Mutex
 }
 
 // slogAdapterForEnvoy adapts *slog.Logger to envoylog.Logger interface
@@ -182,7 +179,7 @@ func (cp *controlPlane) PushXDS(ctx context.Context, nodeID string, resources ma
 	slog.Info("Updated xDS snapshot",
 		"nodeID", nodeID,
 		"version", version,
-		"resourceTypes", len(resources))
+		"resourceTypeCount", len(resources))
 
 	return nil
 }
