@@ -274,15 +274,15 @@ After multiple discussions, I am currently proposing making `Backend` a namespac
 // Backend is the Schema for the backends API.
 type Backend struct {
   metav1.TypeMeta `json:",inline"`
-    // metadata is a standard object metadata.
-    // +optional
-    metav1.ObjectMeta `json:"metadata,omitempty"`
-    // spec defines the desired state of Backend.
-    // +required
-    Spec BackendSpec `json:"spec"`
-    // status defines the observed state of Backend.
-    // +optional
-    Status BackendStatus `json:"status,omitempty"`
+  // metadata is a standard object metadata.
+  // +optional
+  metav1.ObjectMeta `json:"metadata,omitempty"`
+  // spec defines the desired state of Backend.
+  // +required
+  Spec BackendSpec `json:"spec"`
+  // status defines the observed state of Backend.
+  // +optional
+  Status BackendStatus `json:"status,omitempty"`
 }
 
 // BackendSpec defines the desired state of Backend.
@@ -430,7 +430,7 @@ type BackendExtension struct {
 
 // BackendStatus defines the observed state of Backend.
 type BackendStatus struct {
-  // Controllers is a list of controllers that are responsible for managing the InferencePoolImport.
+  // Controllers is a list of controllers that are responsible for managing the Backend.
   //
   // +listType=map
   // +listMapKey=name
@@ -441,7 +441,7 @@ type BackendStatus struct {
 
 type BackendControllerStatus struct {
   // Name is a domain/path string that indicates the name of the controller that manages the
-  // InferencePoolImport. Name corresponds to the GatewayClass controllerName field when the
+  // Backend. Name corresponds to the GatewayClass controllerName field when the
   // controller will manage parents of type "Gateway". Otherwise, the name is implementation-specific.
   //
   // Example: "example.net/import-controller".
