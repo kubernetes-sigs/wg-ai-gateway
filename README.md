@@ -6,7 +6,7 @@ Proposals and discussions for the [AI Gateway Working Group].
 
 ## About
 
-The *AI Gateway* builds on [Gateway API] with capabilities for AI workloads, including [egress gateway] support, AI protocol awareness, and [payload processing] as a first-class concern. Rather than a distinct product category, it describes infrastructure for enforcing policy on AI traffic, such as token-based rate limiting, fine grained access controls for inference APIs, and payload inspection that enables guardrails.
+The term *AI Gateway* in a Kubernetes context refers to a network Gateway (including proxy servers, load-balancers, etc) which (generally) implements the [Gateway API] specification and has capabilities to support networking for AI workloads including AI protocol awareness, [egress gateway] support and [payload processing]. Rather than a distinct product category, it describes infrastructure for enforcing policy on AI traffic, such as token-based rate limiting, fine grained access controls for inference APIs, and payload inspection that enables routing, caching and guardrails.
 
 For more general information about the working group, please see:
 
