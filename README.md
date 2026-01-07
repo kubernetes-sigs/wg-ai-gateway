@@ -6,6 +6,8 @@ Proposals and discussions for the [AI Gateway Working Group].
 
 ## About
 
+The *AI Gateway* builds on [Gateway API] with capabilities for AI workloads, including [egress gateway] support, AI protocol awareness, and [payload processing] as a first-class concern. Rather than a distinct product category, it describes infrastructure for enforcing policy on AI traffic, such as token-based rate limiting, fine grained access controls for inference APIs, and payload inspection that enables guardrails.
+
 For more general information about the working group, please see:
 
 * Our [README] - This provides an overview of the community, contact and
@@ -19,6 +21,9 @@ discussions and staging proposals which (generally) will be developed into
 proposals for specific Kubernetes Special Interest Groups (SIGs) and their
 sub-projects.
 
+[Gateway API]:https://gateway-api.sigs.k8s.io/
+[egress gateway]:/proposals/10-egress-gateways.md
+[payload processing]:/proposals/7-payload-processing.md
 [README]:https://github.com/kubernetes/community/blob/master/wg-ai-gateway/README.md
 [Charter]:https://github.com/kubernetes/community/blob/master/wg-ai-gateway/charter.md
 
