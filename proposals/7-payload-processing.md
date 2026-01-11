@@ -169,7 +169,7 @@ Requirements:
 
 ### Operational Requirements and Assumptions
 
-* Gateway MUST provide Processors with plaintext traffic. Any decryption and (re-)encryption MUST happen in Gateway implementation.
+* It is assumed that Payload Processors will generally operate on payloads that have already been decrypted before passing them to the processor. However we do not preclude the possibility that future implementations may want the payloads decrypted _by the processors_. For now we're not building for this use case, but we'll leave the door open.
 * Gateway MUST support Processors running as workloads on the cluster, as well as remote endpoints. (We should probably focus on cluster-local Services for the first phase)
 * Topology-Aware Routing (or similar constraints) are highly desirable when configuring Gateway consumption of Processors (both due to latency
 concerns, and also since cross-node/cross-AZ traffic may have cloud-networking costs associated with it).
