@@ -565,10 +565,35 @@ proposal complete and ready to move out to other areas.
 [GIE's multi-cluster proposal]:https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/1374-multi-cluster-inference
 [proposal for external MCP/A2A]:https://docs.google.com/document/d/17kA-78gq25BgS2ElHMCd-zy__9clVL-GZQcHCm52854/edit?tab=t.0
 
+
 # Prior Art
 
-TODO: add information about existing egress implementations here that can help
-us to refine our user stories, goals and implementation.
+Several implementations exist for egress traffic management in Kubernetes. Understanding
+these approaches informs our design decisions and highlights gaps that this proposal
+aims to address.
+
+## Existing Implementations
+
+| Implementation | Resource Model | Scope |
+|----------------|----------------|-------|
+| **Istio** | [ServiceEntry], [Gateway], [VirtualService], [DestinationRule] | [Namespace] |
+| **Linkerd** | [EgressNetwork], TLSRoute | [Namespace or global] |
+| **Cilium** | [CiliumEgressGatewayPolicy] | [Cluster] |
+| **OVN-Kubernetes** | [EgressIP], [EgressService], [EgressFirewall] | [Namespace] |
+
+[ServiceEntry]: https://istio.io/latest/docs/reference/config/networking/service-entry/
+[Gateway]: https://istio.io/latest/docs/reference/config/networking/gateway/
+[VirtualService]: https://istio.io/latest/docs/reference/config/networking/virtual-service/
+[DestinationRule]: https://istio.io/latest/docs/reference/config/networking/destination-rule/
+[Namespace]: https://istio.io/latest/docs/tasks/traffic-management/egress/egress-gateway/
+[EgressNetwork]: https://linkerd.io/2-edge/reference/egress-network/
+[Namespace or global]: https://linkerd.io/2-edge/reference/egress-network/#namespace-semantics
+[CiliumEgressGatewayPolicy]: https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/
+[Cluster]: https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/#ciliumegressgatewaypolicy
+[EgressIP]: https://ovn-kubernetes.io/features/cluster-egress-controls/egress-ip/
+[EgressService]: https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/
+[EgressFirewall]: https://rcarrata.com/openshift/egress-firewall/
+
 
 # Relevant Links
 
