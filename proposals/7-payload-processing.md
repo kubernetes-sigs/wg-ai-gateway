@@ -1,6 +1,6 @@
 # Payload Processing
 
-* Authors: @shaneutt, @kflynn
+* Authors: @shaneutt, @kflynn, @shachartal 
 * Status: Proposed
 
 # What?
@@ -165,18 +165,101 @@ Requirements:
 
 ### Implementation Details
 
-TODO: in a later PR.
 
-> This should be left blank until the "What?" and "Why?" are agreed upon,
-> as defining "How?" the goals are accomplished is not important unless we can
-> first even agree on what the problem is, and why we want to solve it.
->
-> This section is fairly freeform, because (again) these proposals will
-> eventually find there way into any number of different final proposal formats
-> in other projects. However, the general guidance is to break things down into
-> highly focused sections as much as possible to help make things easier to
-> read and review. Long, unbroken walls of code and YAML in this document are
-> not advisable as that may increase the time it takes to review.
+
+### Operational Requirements and Assumptions
+
+* It is assumed that Payload Processors will generally operate on payloads that have already been decrypted before passing them to the processor. However we do not preclude the possibility that future implementations may want the payloads decrypted _by the processors_. For now we're not building for this use case, but we'll leave the door open.
+* Gateway MUST support Processors running as workloads on the cluster, as well as remote endpoints. (We should probably focus on cluster-local Services for the first phase)
+* Topology-Aware Routing (or similar constraints) are highly desirable when configuring Gateway consumption of Processors (both due to latency
+concerns, and also since cross-node/cross-AZ traffic may have cloud-networking costs associated with it).
+* Processor MAY support scale based on operational metrics from Gateway.
+* Processor MAY present indications of its capacity (or lack thereof) to Gateway. Gateway MAY support reducing the traffic 
+load on the Processor if such indications are presented. In some scenarios, the user MAY prefer degrading payload processing
+over significant impact on data plane performance.
+
+## Resource Model
+
+
+### Payload Processor Custom Resource
+
+
+`HTTPRoute` **rules** are the most specific level where we wish to prescribe Payload Processors.
+The amount of details and settings we need to support at the processor level is greater than what we can comfortable inline within a sub-object
+of `HTTPRoute` (See also how long `spec.rules.filters` can become on its own, today).
+
+The approach below creates a new custom resource kind for Payload Processing Pipelines.
+A minimal `HTTPRoute` that references a processor pipeline is shown below.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-httproute
+spec:
+  parentRefs:
+  - name: example-gateway
+  hostnames:
+  - "www.example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /query
+    backendRefs:
+    - name: example-svc
+      port: 8080
+    processing:
+    - name: prompt-injection-guardrails
+      pipelineRef:
+        name: prompt-injection-protection
+---
+apiVersion: gateway.networking.k8s.io/v1alpha1
+kind: PayloadProcessingPipeline
+metadata:
+  name: prompt-injection-protection
+spec:
+  # Sequence of processors
+  processor:
+  - name: malicious-prompt-prevention
+    # Indicates if this processor rule can mutate passed data
+    allowMutating: true
+    # Determines which parts of the request/response pair is of interest to the processor
+    phases: ["request-headers", "request-body", "response-headers", "response-body"]
+    # Defines the callout type, in this case it is backed by a service hosted on the cluster
+    endpointRef:
+      kind: Service
+      name: bad-prompt-detector
+    # Configuration for the callout itself
+    remoteConfig:
+      timeout: "250ms"
+      fail: open | closed
+      # Context to send in gRPC Metadata
+      context: 
+        tenant_id: "customer-a"
+```
+
+## Open Design Questions
+
+* Payload Processors MUST implement a custom (gRPC?) protocol (specifics TBD, part of a future PR). This protocol allows them to receive phases of the request lifecycle and emit one of several signals, such as:
+    * "give me the next part"
+    * "this request is approved"
+    * rejection of the request/response
+    * "this response is approved"
+    * "change this part I received to be as follows: ..."
+* Payload Processors MAY receive additional context as part of their configuration... Is this a real use case?
+* We need to figure out whether to allow conceptual "processing loops" between `spec.rules.matches` and **mutating** payload processors.
+    * Would an approach that avoids processing loops between `spec.rules.matches` and Payload Processors be making any use case impossible to implement?
+* There is potential overlap between `spec.rules.filters` and `spec.rules.processors`:
+    * Do we avoid it for now?
+    * Processers can supplant filters, but should they?
+    * If we retain both, should Processors be invoked before or after any filters? (Do we want to support both approaches?)
+* How do Gateway-level Processors and HTTPRoute-level Processors co-exist?
+    * Do we allow defining both? (current assumption is that it is allowed)
+    * How do we co-prioritize them?
+* Expressibility of concurrency between Pipeline `.spec.rules` list items (perhaps as second-level list)
+
+
 
 # Relevant Links
 
