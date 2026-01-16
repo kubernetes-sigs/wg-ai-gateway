@@ -30,8 +30,8 @@ sub-projects.
 ### Proposals
 
 Please see our [proposals directory](/proposals) to view the proposals we
-have so far. If you'd like to submit a new proposal, please contact us in one of 
-our communication channels to get some feedback and identify potential 
+have so far. If you'd like to submit a new proposal, please contact us in one of
+our communication channels to get some feedback and identify potential
 supporters for your proposal in the community who can help move it forward with you.
 
 ### Prototypes
@@ -45,15 +45,15 @@ projects.
 ## Community, discussion, contribution, and support
 
 Our community meetings are held on Monday/Thursday ([Calendar](https://www.kubernetes.dev/resources/calendar/), [Meeting Notes](https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs)).
-* WG AI Gateway Bi-Weekly Meeting (Earlier Option): [Mondays at 12PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=12PM&tz=UTC).
-* WG AI Gateway Bi-Weekly Meeting (Later Option): [Thursdays at 6PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=6PM&tz=UTC).
+* WG AI Gateway Bi-Weekly Meeting (Earlier Option): [Mondays at 1PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=12PM&tz=UTC).
+* WG AI Gateway Bi-Weekly Meeting (Later Option): [Thursdays at 7PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=6PM&tz=UTC).
 
 You can reach out to members of the community using the following communication channels:
 - [Slack channel wg-ai-gateway](https://kubernetes.slack.com/messages/wg-ai-gateway)
 - [Mailing List](https://groups.google.com/a/kubernetes.io/g/wg-ai-gateway)
 - [Discussion Board](https://github.com/kubernetes-sigs/wg-ai-gateway/discussions)
 
-Contributions are readily welcomed!  
+Contributions are readily welcomed!
 
 Learn how to engage with the Kubernetes community on the [community page](https://kubernetes.io/community/).
 
