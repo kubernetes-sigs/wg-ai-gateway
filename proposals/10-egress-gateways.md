@@ -594,7 +594,28 @@ aims to address.
 [EgressService]: https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/
 [EgressFirewall]: https://rcarrata.com/openshift/egress-firewall/
 
+## Istio
 
-# Relevant Links
+Istio offers a centralized egress gateway in complement to direct egress from pods via a sidecar proxy.
 
-* [Istio's implementation of Egress Gateways](https://istio.io/latest/docs/tasks/traffic-management/egress/egress-gateway/)
+### Centralized Egress Gateway
+
+The dedicated Egress `Gateway` is framed as a mirror image of an ingress gateway, acting as a choke point albeit for all traffic exiting a mesh.
+
+> An ingress gateway allows you to define entry points into the mesh that all incoming traffic flows through. Egress gateway is a symmetrical concept; it defines exit points from the mesh. Egress gateways allow you to apply Istio features, for example, monitoring and route rules, to traffic exiting the mesh.
+
+[source](https://istio.io/latest/docs/tasks/traffic-management/egress/egress-gateway/)
+
+### Direct Egress via Sidecar
+
+Envoy sidecars send traffic directly to external services once those services are modeled in Istio’s registry via `ServiceEntry`
+
+With respect to scoping, notably, `ServiceEntry` is namespace scoped, but visible by default to all namespaces.
+
+> The ’exportTo’ field allows for control over the visibility of a service declaration to other namespaces in the mesh. By default, a service is exported to all namespaces.
+
+[source](https://istio.io/latest/docs/reference/config/networking/service-entry/)
+
+### Key Takeaway
+
+Istio’s pattern is closest to a mesh attached gateway with an optional centralized egress gateway, where the centralized egress gateway serves as an optional chokepoint in cases where e.g., all traffic exiting a mesh (or node) must adhere to a given policy, or in clusters where application nodes have no public IPs. In their model external destinations are represented via `ServiceEntry` as opposed to something like a `Backend`.
