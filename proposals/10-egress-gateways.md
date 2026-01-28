@@ -608,7 +608,7 @@ The dedicated Egress `Gateway` is framed as a mirror image of an ingress gateway
 
 ### Direct Egress via Sidecar
 
-Envoy sidecars send traffic directly to external services once those services are modeled in Istio’s registry via `ServiceEntry`
+Envoy sidecars send traffic directly to external services once those services are modeled in Istio's registry via `ServiceEntry`.
 
 With respect to scoping, notably, `ServiceEntry` is namespace scoped, but visible by default to all namespaces.
 
@@ -640,7 +640,7 @@ The key primitive in Linkerd's approach is `EgressNetwork`. It may represent mul
 
 > EgressNetwork can encompass a set of destinations. This set can vary in size - from a single IP address to the entire network space that is not within the boundaries of the cluster.
 
-(source](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)
+[source](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)
 
 Fundamentally, this means that `EgressNetwork` exists to classify outbound traffic, not to represent a concrete upstream endpoint or its connection semantics. Policy is applied via Gateway API's `HTTPRoute` and `TLSRoute` which attach to the `EgressNetwork` as parent.
 
@@ -670,7 +670,7 @@ Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is
 
 ### OVN-Kubernetes
 
-`EgressIP` ensures that traffic from configured pods or namespaces present a consistent source IP to external services.
+`EgressIP` ensures that traffic from configured pods or namespaces presents a consistent source IP to external services.
 `EgressFirewall` supports namespace-scoped Allow/Deny policies for traffic from pods to IPs outside the cluster.
 `EgressService` has a one-to-one mapping with a `LoadBalancer` Service:
 
@@ -680,4 +680,4 @@ Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is
 
 ### Key Takeaway
 
-These approaches are complementary to our use case. This proposal focuses on application-layer (L7) policy enforcement and routing semantics, e.g., [payload processing](../7-payload-processing.md), which operates above the network level.
+These approaches are complementary to our use case. This proposal focuses on application-layer (L7) policy enforcement and routing semantics, e.g., [payload processing](7-payload-processing.md), which operates above the network level.
