@@ -619,3 +619,37 @@ With respect to scoping, notably, `ServiceEntry` is namespace scoped, but visibl
 ### Key Takeaway
 
 Istio’s pattern is closest to a mesh attached gateway with an optional centralized egress gateway, where the centralized egress gateway serves as an optional chokepoint in cases where e.g., all traffic exiting a mesh (or node) must adhere to a given policy, or in clusters where application nodes have no public IPs. In their model external destinations are represented via `ServiceEntry` as opposed to something like a `Backend`.
+
+## Linkerd
+
+Linkerd's model is mesh-attached, with policy enforced at the sidecar proxy. There is no mandatory centralized gateway.
+
+> Linkerd’s egress control is implemented in the sidecar proxy itself; separate egress gateways are not required (though they can be supported).
+
+[source](https://linkerd.io/2-edge/features/egress/)
+
+There is an important caveat regarding egress via service mesh.
+
+> No service mesh can provide a strong security guarantee about egress traffic by itself; for example, a malicious actor could bypass the Linkerd sidecar - and thus Linkerd’s egress controls - entirely. Fully restricting egress traffic in the presence of arbitrary applications thus typically requires a more comprehensive approach.
+
+[source](https://linkerd.io/2-edge/reference/egress-network/)
+
+### EgressNetwork
+
+The key primitive in Linkerd's approach is `EgressNetwork`. It may represent multiple external destinations.
+
+> EgressNetwork can encompass a set of destinations. This set can vary in size - from a single IP address to the entire network space that is not within the boundaries of the cluster.
+
+Fundamentally, this means that `EgressNetwork` exists to classify outbound traffic, not to represent a concrete upstream endpoint or its connection semantics. Policy is applied via Gateway API's `HTTPRoute` and `TLSRoute` which attach to the `EgressNetwork` as parent.
+
+In this model, Gateway API resources act purely as a policy expression language, not as a description of deployed gateway infrastructure.
+
+`EgressNetwork` maintains a distinction between namespace and global scoping via a designated global namespace.
+
+> EgressNetworks are namespaced resources, which means that they affect only clients within the namespace that they reside in. The only exception is EgressNetworks created in the global egress namespace: these EgressNetworks affect clients in all namespaces.
+
+[source](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)
+
+### Key Takeaway
+
+Linkerd’s approach attaches Gateway API routes to a first-class object that classifies external destinations, rather than representing concrete upstream endpoints or connection semantics. It does not require a centralized egress proxy, relying instead on sidecar enforcement, while explicitly acknowledging that stronger enforcement may require additional mechanisms.
