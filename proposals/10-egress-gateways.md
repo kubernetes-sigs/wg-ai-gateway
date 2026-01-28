@@ -600,7 +600,7 @@ Istio offers a centralized egress gateway in complement to direct egress from po
 
 ### Centralized Egress Gateway
 
-The dedicated Egress `Gateway` is framed as a mirror image of an ingress gateway, acting as a choke point albeit for all traffic exiting a mesh.
+The dedicated Egress `Gateway` is framed as a mirror image of an ingress gateway, acting as a choke point for all traffic exiting a mesh.
 
 > An ingress gateway allows you to define entry points into the mesh that all incoming traffic flows through. Egress gateway is a symmetrical concept; it defines exit points from the mesh. Egress gateways allow you to apply Istio features, for example, monitoring and route rules, to traffic exiting the mesh.
 
@@ -616,9 +616,23 @@ With respect to scoping, notably, `ServiceEntry` is namespace scoped, but visibl
 
 [source](https://istio.io/latest/docs/reference/config/networking/service-entry/)
 
+### Ambient Mesh / Waypoint Proxy
+
+Istio also offers the option to move policy enforcement out of sidecars and into a more centralized "Waypoint Proxy".
+
+> Services can bind to a waypoint, and Istio will automatically send all traffic to those services through the waypoint.
+
+Traffic to external services modeled via `ServiceEntry` can also be processed by a waypoint when associated with a namespace-level waypoint configuration.
+
+This has the impact of centralizing policy enforcement at the namespace level for associated traffic, which can reduce complexity in namespace-centric deployments.
+
+[source](https://www.solo.io/blog/egress-gateways-made-easy)
+
 ### Key Takeaway
 
-Istio’s pattern is closest to a mesh attached gateway with an optional centralized egress gateway, where the centralized egress gateway serves as an optional chokepoint in cases where e.g., all traffic exiting a mesh (or node) must adhere to a given policy, or in clusters where application nodes have no public IPs. In their model external destinations are represented via `ServiceEntry` as opposed to something like a `Backend`.
+Istio's pattern is closest to a mesh attached gateway with an optional centralized egress gateway, where the centralized egress gateway serves as an optional chokepoint in cases where e.g., all traffic exiting a mesh (or node) must adhere to a given policy, or in clusters where application nodes have no public IPs. In their model external destinations are represented via `ServiceEntry` as opposed to something like a `Backend`.
+
+Though notably, the introduction of a "Waypoint Proxy" to centralize policy enforcement for traffic associated with a namespace, including traffic to external services modeled via ServiceEntry, moves Istio's egress model closer to a centralized enforcement boundary.
 
 ## Linkerd
 
