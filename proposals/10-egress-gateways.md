@@ -579,7 +579,7 @@ aims to address.
 | **Istio** | [ServiceEntry], [Gateway], [VirtualService], [DestinationRule] | [Namespace] |
 | **Linkerd** | [EgressNetwork], TLSRoute | [Namespace or global] |
 | **Cilium** | [CiliumEgressGatewayPolicy] | [Cluster] |
-| **OVN-Kubernetes** | [EgressIP], [EgressService], [EgressFirewall] | [Namespace] |
+| **OVN-Kubernetes** | [EgressIP], [EgressService], [EgressFirewall] | Mixed |
 
 [ServiceEntry]: https://istio.io/latest/docs/reference/config/networking/service-entry/
 [Gateway]: https://istio.io/latest/docs/reference/config/networking/gateway/
@@ -592,7 +592,7 @@ aims to address.
 [Cluster]: https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/#ciliumegressgatewaypolicy
 [EgressIP]: https://ovn-kubernetes.io/features/cluster-egress-controls/egress-ip/
 [EgressService]: https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/
-[EgressFirewall]: https://rcarrata.com/openshift/egress-firewall/
+[EgressFirewall]: https://ovn-kubernetes.io/features/network-security-controls/egress-firewall/
 
 ## Istio
 
@@ -640,6 +640,8 @@ The key primitive in Linkerd's approach is `EgressNetwork`. It may represent mul
 
 > EgressNetwork can encompass a set of destinations. This set can vary in size - from a single IP address to the entire network space that is not within the boundaries of the cluster.
 
+(source](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)
+
 Fundamentally, this means that `EgressNetwork` exists to classify outbound traffic, not to represent a concrete upstream endpoint or its connection semantics. Policy is applied via Gateway API's `HTTPRoute` and `TLSRoute` which attach to the `EgressNetwork` as parent.
 
 In this model, Gateway API resources act purely as a policy expression language, not as a description of deployed gateway infrastructure.
@@ -678,4 +680,4 @@ Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is
 
 ### Key Takeaway
 
-These approaches are complementary to our use case. This proposal focuses on application-layer (L7) policy enforcement and routing semantics, e.g., [payload processing](7-payload-processing.md), which operates above the network level.
+These approaches are complementary to our use case. This proposal focuses on application-layer (L7) policy enforcement and routing semantics, e.g., [payload processing](../7-payload-processing.md), which operates above the network level.
