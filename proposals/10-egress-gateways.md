@@ -565,11 +565,133 @@ proposal complete and ready to move out to other areas.
 [GIE's multi-cluster proposal]:https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/1374-multi-cluster-inference
 [proposal for external MCP/A2A]:https://docs.google.com/document/d/17kA-78gq25BgS2ElHMCd-zy__9clVL-GZQcHCm52854/edit?tab=t.0
 
+
 # Prior Art
 
-TODO: add information about existing egress implementations here that can help
-us to refine our user stories, goals and implementation.
+Several implementations exist for egress traffic management in Kubernetes. Understanding
+these approaches informs our design decisions and highlights gaps that this proposal
+aims to address.
 
-# Relevant Links
+## Existing Implementations
 
-* [Istio's implementation of Egress Gateways](https://istio.io/latest/docs/tasks/traffic-management/egress/egress-gateway/)
+| Implementation | Resource Model | Scope |
+|----------------|----------------|-------|
+| **Istio** | [ServiceEntry], [Gateway], [VirtualService], [DestinationRule] | [Namespace] |
+| **Linkerd** | [EgressNetwork], TLSRoute | [Namespace or global] |
+| **Cilium** | [CiliumEgressGatewayPolicy] | [Cluster] |
+| **OVN-Kubernetes** | [EgressIP], [EgressService], [EgressFirewall] | Mixed |
+
+[ServiceEntry]: https://istio.io/latest/docs/reference/config/networking/service-entry/
+[Gateway]: https://istio.io/latest/docs/reference/config/networking/gateway/
+[VirtualService]: https://istio.io/latest/docs/reference/config/networking/virtual-service/
+[DestinationRule]: https://istio.io/latest/docs/reference/config/networking/destination-rule/
+[Namespace]: https://istio.io/latest/docs/tasks/traffic-management/egress/egress-gateway/
+[EgressNetwork]: https://linkerd.io/2-edge/reference/egress-network/
+[Namespace or global]: https://linkerd.io/2-edge/reference/egress-network/#namespace-semantics
+[CiliumEgressGatewayPolicy]: https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/
+[Cluster]: https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/#ciliumegressgatewaypolicy
+[EgressIP]: https://ovn-kubernetes.io/features/cluster-egress-controls/egress-ip/
+[EgressService]: https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/
+[EgressFirewall]: https://ovn-kubernetes.io/features/network-security-controls/egress-firewall/
+
+## Istio
+
+Istio offers a centralized egress gateway in complement to direct egress from pods via a sidecar proxy.
+
+### Centralized Egress Gateway
+
+The dedicated Egress `Gateway` is framed as a mirror image of an ingress gateway, acting as a choke point for all traffic exiting a mesh.
+
+> An ingress gateway allows you to define entry points into the mesh that all incoming traffic flows through. Egress gateway is a symmetrical concept; it defines exit points from the mesh. Egress gateways allow you to apply Istio features, for example, monitoring and route rules, to traffic exiting the mesh.
+
+[source](https://istio.io/latest/docs/tasks/traffic-management/egress/egress-gateway/)
+
+### Direct Egress via Sidecar
+
+Envoy sidecars send traffic directly to external services once those services are modeled in Istio's registry via `ServiceEntry`.
+
+With respect to scoping, notably, `ServiceEntry` is namespace scoped, but visible by default to all namespaces.
+
+> The ’exportTo’ field allows for control over the visibility of a service declaration to other namespaces in the mesh. By default, a service is exported to all namespaces.
+
+[source](https://istio.io/latest/docs/reference/config/networking/service-entry/)
+
+### Ambient Mesh / Waypoint Proxy
+
+Istio also offers the option to move policy enforcement out of sidecars and into a more centralized "Waypoint Proxy".
+
+> Services can bind to a waypoint, and Istio will automatically send all traffic to those services through the waypoint.
+
+Traffic to external services modeled via `ServiceEntry` can also be processed by a waypoint when associated with a namespace-level waypoint configuration.
+
+This has the impact of centralizing policy enforcement at the namespace level for associated traffic, which can reduce complexity in namespace-centric deployments.
+
+[source](https://www.solo.io/blog/egress-gateways-made-easy)
+
+### Key Takeaway
+
+Istio's pattern is closest to a mesh attached gateway with an optional centralized egress gateway, where the centralized egress gateway serves as an optional chokepoint in cases where e.g., all traffic exiting a mesh (or node) must adhere to a given policy, or in clusters where application nodes have no public IPs. In their model external destinations are represented via `ServiceEntry` as opposed to something like a `Backend`.
+
+Though notably, the introduction of a "Waypoint Proxy" to centralize policy enforcement for traffic associated with a namespace, including traffic to external services modeled via ServiceEntry, moves Istio's egress model closer to a centralized enforcement boundary.
+
+## Linkerd
+
+Linkerd's model is mesh-attached, with policy enforced at the sidecar proxy. There is no mandatory centralized gateway.
+
+> Linkerd’s egress control is implemented in the sidecar proxy itself; separate egress gateways are not required (though they can be supported).
+
+[source](https://linkerd.io/2-edge/features/egress/)
+
+There is an important caveat regarding egress via service mesh.
+
+> No service mesh can provide a strong security guarantee about egress traffic by itself; for example, a malicious actor could bypass the Linkerd sidecar - and thus Linkerd’s egress controls - entirely. Fully restricting egress traffic in the presence of arbitrary applications thus typically requires a more comprehensive approach.
+
+[source](https://linkerd.io/2-edge/reference/egress-network/)
+
+### EgressNetwork
+
+The key primitive in Linkerd's approach is `EgressNetwork`. It may represent multiple external destinations.
+
+> EgressNetwork can encompass a set of destinations. This set can vary in size - from a single IP address to the entire network space that is not within the boundaries of the cluster.
+
+[source](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)
+
+Fundamentally, this means that `EgressNetwork` exists to classify outbound traffic, not to represent a concrete upstream endpoint or its connection semantics. Policy is applied via Gateway API's `HTTPRoute` and `TLSRoute` which attach to the `EgressNetwork` as parent.
+
+In this model, Gateway API resources act purely as a policy expression language, not as a description of deployed gateway infrastructure.
+
+`EgressNetwork` maintains a distinction between namespace and global scoping via a designated global namespace.
+
+> EgressNetworks are namespaced resources, which means that they affect only clients within the namespace that they reside in. The only exception is EgressNetworks created in the global egress namespace: these EgressNetworks affect clients in all namespaces.
+
+[source](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)
+
+### Key Takeaway
+
+Linkerd’s approach attaches Gateway API routes to a first-class object that classifies external destinations, rather than representing concrete upstream endpoints or connection semantics. It does not require a centralized egress proxy, relying instead on sidecar enforcement, while explicitly acknowledging that stronger enforcement may require additional mechanisms.
+
+## Network-Level Approaches
+
+Cilium and OVN-Kubernetes offer egress routing policy at the L3/L4 level, focused on source identity and network-level filtering rather than application protocol semantics.
+
+### Cilium
+
+> The egress gateway feature routes all IPv4 and IPv6 connections originating from pods and destined to specific cluster-external CIDRs through particular nodes, from now on called "gateway nodes".
+
+[source](https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/#egress-gateway)
+
+Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is cluster scoped. It serves to select pods and matching destination CIDRs and then ensures that egress traffic matching those criteria is routed through specific nodes with specific source IPs.
+
+### OVN-Kubernetes
+
+`EgressIP` ensures that traffic from configured pods or namespaces presents a consistent source IP to external services.
+`EgressFirewall` supports namespace-scoped Allow/Deny policies for traffic from pods to IPs outside the cluster.
+`EgressService` has a one-to-one mapping with a `LoadBalancer` Service:
+
+> [EgressService] enables the egress traffic of pods backing a LoadBalancer service to use a different network than the main one and/or their source IP to be the Service's ingress IP.
+
+[source](https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/)
+
+### Key Takeaway
+
+These approaches are complementary to our use case. This proposal focuses on application-layer (L7) policy enforcement and routing semantics, e.g., [payload processing](7-payload-processing.md), which operates above the network level.
