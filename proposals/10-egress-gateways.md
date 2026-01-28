@@ -666,4 +666,23 @@ Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is
 
 ### Key Takeaway
 
-Cilium is focused on enforcing L3/L4 routing policy at the cluster level. It is complementary to our use case of offering application-layer (L7) policy enforcement and routing semantics. 
+Cilium is focused on enforcing L3/L4 routing policy at the cluster level. It is complementary to our use case of offering application-layer (L7) policy enforcement and routing semantics.
+
+
+## OVN-Kubernetes
+
+Like Cilium, OVN-Kubernetes offers egress routing policy at the L3/L4 level.
+
+`EgressIP` ensures that traffic from configured pods or namespaces present a consistent source ip to external services.
+`EgressFirewall` supports namespace scoped Allow/Deny policies for traffic from pods to IPs outside the cluster.
+`EgressService` has a one-to-one mapping with a `LoadBalancer` Service:
+
+> [EgressService] enables the egress traffic of pods backing a LoadBalancer service to use a different network than the main one and/or their source IP to be the Service's ingress IP.
+
+[source](https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/)
+
+### Key Takeaway
+
+The use cases supported at the L3/L4 level diverge from the high level policies this proposal intends to support e.g., [payload processing](7-payload-processing.md).
+
+We should ensure that our approach is complementary to these use cases.
