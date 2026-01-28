@@ -42,11 +42,9 @@ collaborate and share, without creating any confusion of there being code in
 `main` and that somehow being construed as something that should be used in other
 projects.
 
-## Community, discussion, contribution, and support
+## Community, discussions, contributions, and support
 
-Our community meetings are held on Monday/Thursday ([Calendar](https://www.kubernetes.dev/resources/calendar/), [Meeting Notes](https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs)).
-* WG AI Gateway Bi-Weekly Meeting (Earlier Option): [Mondays at 1PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=12PM&tz=UTC).
-* WG AI Gateway Bi-Weekly Meeting (Later Option): [Thursdays at 7PM UTC]() (bi-weekly). [Convert to your timezone](http://www.thetimezoneconverter.com/?t=6PM&tz=UTC).
+Our community meetings are held weekly on Thursday 2PM EST ([Calendar](https://www.kubernetes.dev/resources/calendar/), [Meeting Notes](https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs)). [Convert to your timezone](https://dateful.com/time-zone-converter?t=2PM&tz=ET%20%28Eastern%20Time%29).
 
 You can reach out to members of the community using the following communication channels:
 - [Slack channel wg-ai-gateway](https://kubernetes.slack.com/messages/wg-ai-gateway)
