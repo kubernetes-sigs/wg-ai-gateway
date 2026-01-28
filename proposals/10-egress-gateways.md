@@ -653,3 +653,17 @@ In this model, Gateway API resources act purely as a policy expression language,
 ### Key Takeaway
 
 Linkerd’s approach attaches Gateway API routes to a first-class object that classifies external destinations, rather than representing concrete upstream endpoints or connection semantics. It does not require a centralized egress proxy, relying instead on sidecar enforcement, while explicitly acknowledging that stronger enforcement may require additional mechanisms.
+
+## Cilium
+
+Cilium’s egress gateway functionality is focused on network-level routing and source identity rather than L7 routing or application protocol semantics.
+
+> The egress gateway feature routes all IPv4 and IPv6 connections originating from pods and destined to specific cluster-external CIDRs through particular nodes, from now on called “gateway nodes”.
+
+[source](https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/#egress-gateway)
+
+Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is cluster scoped. It serves to select pods and matching destination CIDRs and then ensures that egress traffic matching those criteria is routed through specific nodes with specific source IPs.
+
+### Key Takeaway
+
+Cilium is focused on enforcing L3/L4 routing policy at the cluster level. It is complementary to our use case of offering application-layer (L7) policy enforcement and routing semantics. 
