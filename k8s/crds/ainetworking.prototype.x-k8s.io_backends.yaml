@@ -223,6 +223,7 @@ spec:
                       - number
                       - protocol
                       type: object
+                    minItems: 1
                     type: array
                   type:
                     description: BackendType defines the type of the Backend destination.
@@ -232,6 +233,7 @@ spec:
                     - KubernetesService
                     type: string
                 required:
+                - ports
                 - type
                 type: object
                 x-kubernetes-validations:

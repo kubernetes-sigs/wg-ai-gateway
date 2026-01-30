@@ -141,6 +141,7 @@ func NewController(
 			kubeInformerFactory.Core().V1().Namespaces().Lister(),
 			kubeInformerFactory.Core().V1().Services().Lister(),
 			kubeInformerFactory.Core().V1().Secrets().Lister(),
+			kubeInformerFactory.Discovery().V1().EndpointSlices().Lister(),
 			gatewayInformerFactory.Gateway().V1().Gateways().Lister(),
 			gatewayInformerFactory.Gateway().V1().HTTPRoutes().Lister(),
 			aigatewayInformerFactory.Ainetworking().V0alpha0().Backends().Lister(),

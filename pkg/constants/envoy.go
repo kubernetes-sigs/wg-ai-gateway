@@ -15,6 +15,6 @@ const (
 	EnvoyRouteNameFormat = "%s-%s-rule%d-match%d"
 	// VHostNameFormat is the format string for Envoy virtual host names, becoming `<gateway-name>-vh-<port>-<domain>`.
 	VHostNameFormat = "%s-vh-%d-%s"
-	// ClusterNameFormat is the format string for Envoy cluster names, becoming `<namespace>-<backend-name>`.
-	ClusterNameFormat = "%s-%s"
+	// ClusterNameFormat is the format string for Envoy cluster names, becoming `<namespace>-<backend-name>-<port>`.
+	ClusterNameFormat = "%s-%s-%d"
 )

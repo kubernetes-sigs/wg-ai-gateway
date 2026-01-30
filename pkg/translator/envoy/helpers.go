@@ -7,6 +7,7 @@ import (
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
+	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	hcmv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	transport_socketsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
@@ -35,21 +36,12 @@ func (t *translator) buildClustersFromBackends(backends []*aigatewayv0alpha0.Bac
 				ports = append(ports, port.Number)
 			}
 		} else {
-			// Use default ports based on backend type
-			if backend.Spec.Destination.Type == aigatewayv0alpha0.BackendTypeFqdn {
-				ports = []uint32{80} // Default HTTP port for FQDN
-			} else {
-				ports = []uint32{80} // Default port for K8s services too
-			}
+			return nil, fmt.Errorf("backend %s/%s has no ports defined", backend.Namespace, backend.Name)
 		}
 
 		// Create one cluster per port
 		for _, port := range ports {
-			clusterName := fmt.Sprintf(constants.ClusterNameFormat, backend.Namespace, backend.Name)
-			if port != 80 && port != 443 {
-				// Add port suffix for non-standard ports to avoid naming conflicts
-				clusterName = fmt.Sprintf("%s-%d", clusterName, port)
-			}
+			clusterName := fmt.Sprintf(constants.ClusterNameFormat, backend.Namespace, backend.Name, port)
 
 			cluster := &clusterv3.Cluster{
 				Name:           clusterName,
@@ -62,9 +54,10 @@ func (t *translator) buildClustersFromBackends(backends []*aigatewayv0alpha0.Bac
 				// For FQDN backends, use DNS discovery
 				cluster.ClusterDiscoveryType = &clusterv3.Cluster_Type{Type: clusterv3.Cluster_LOGICAL_DNS}
 				cluster.DnsLookupFamily = clusterv3.Cluster_V4_ONLY
-				if backend.Spec.Destination.FQDN != nil {
-					cluster.LoadAssignment = t.createClusterLoadAssignment(clusterName, backend.Spec.Destination.FQDN.Hostname, port)
+				if backend.Spec.Destination.FQDN == nil {
+					return nil, fmt.Errorf("backend %s/%s has type FQDN but no FQDN configuration", backend.Namespace, backend.Name)
 				}
+				cluster.LoadAssignment = t.createClusterLoadAssignment(clusterName, backend.Spec.Destination.FQDN.Hostname, port)
 
 			case aigatewayv0alpha0.BackendTypeKubernetesService:
 				// For Kubernetes services, use EDS to get endpoints directly
@@ -121,21 +114,13 @@ func (t *translator) createClusterLoadAssignment(clusterName, serviceHost string
 }
 
 // translateListenerToFilterChain creates a filter chain for an Envoy listener
-func (t *translator) translateListenerToFilterChain(gateway *gatewayv1.Gateway, listener gatewayv1.Listener, routeName string) (*listenerv3.FilterChain, error) {
+func (t *translator) translateListenerToFilterChain(gateway *gatewayv1.Gateway, listener gatewayv1.Listener, routeConfig *routev3.RouteConfiguration) (*listenerv3.FilterChain, error) {
 	// Create HTTP connection manager filter
 	hcm := &hcmv3.HttpConnectionManager{
 		CodecType:  hcmv3.HttpConnectionManager_AUTO,
 		StatPrefix: fmt.Sprintf("gateway_%s_listener_%s", gateway.Name, listener.Name),
-		RouteSpecifier: &hcmv3.HttpConnectionManager_Rds{
-			Rds: &hcmv3.Rds{
-				ConfigSource: &corev3.ConfigSource{
-					ConfigSourceSpecifier: &corev3.ConfigSource_Ads{
-						Ads: &corev3.AggregatedConfigSource{},
-					},
-					ResourceApiVersion: resourcev3.DefaultAPIVersion,
-				},
-				RouteConfigName: routeName,
-			},
+		RouteSpecifier: &hcmv3.HttpConnectionManager_RouteConfig{
+			RouteConfig: routeConfig,
 		},
 	}
 
@@ -210,26 +195,12 @@ func (t *translator) generateEDSFromService(serviceName, serviceNamespace string
 		return nil, fmt.Errorf("failed to list EndpointSlices for service %s/%s: %w", serviceNamespace, serviceName, err)
 	}
 
-	clusterName := fmt.Sprintf(constants.ClusterNameFormat, serviceNamespace, serviceName)
-	if servicePort != 80 && servicePort != 443 {
-		clusterName = fmt.Sprintf("%s-%d", clusterName, servicePort)
-	}
+	clusterName := fmt.Sprintf(constants.ClusterNameFormat, serviceNamespace, serviceName, servicePort)
 
 	var lbEndpoints []*endpointv3.LbEndpoint
 
 	// Iterate through all EndpointSlices for this service
 	for _, es := range endpointSlices {
-		// Find the port in the EndpointSlice that matches our target port
-		var targetPortName string
-		for _, port := range es.Ports {
-			if port.Port != nil && uint32(*port.Port) == servicePort {
-				if port.Name != nil {
-					targetPortName = *port.Name
-				}
-				break
-			}
-		}
-
 		// Process endpoints in this slice
 		for _, endpoint := range es.Endpoints {
 			// Skip endpoints that are not ready
@@ -258,7 +229,7 @@ func (t *translator) generateEDSFromService(serviceName, serviceNamespace string
 
 				// Set health check configuration if the endpoint has health info
 				if endpoint.Conditions.Ready != nil {
-					lbEndpoint.HealthStatus = endpointv3.HealthStatus_HEALTHY
+					lbEndpoint.HealthStatus = corev3.HealthStatus_HEALTHY
 				}
 
 				lbEndpoints = append(lbEndpoints, lbEndpoint)

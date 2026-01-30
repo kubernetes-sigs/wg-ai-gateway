@@ -369,8 +369,16 @@ func buildHTTPRouteAction(
 			continue
 		}
 
+		// Generate the cluster name, accounting for port
+		var port uint32 = 80 // default port
+		// If the backend has specific ports configured, determine which port to use
+		if len(backend.Spec.Destination.Ports) > 0 {
+			// Use the first port (which should be the target port from HTTPRoute)
+			port = backend.Spec.Destination.Ports[0].Number
+		}
+
 		clusterWeight := &routev3.WeightedCluster_ClusterWeight{
-			Name:   fmt.Sprintf(constants.ClusterNameFormat, backend.Namespace, backend.Name),
+			Name:   fmt.Sprintf(constants.ClusterNameFormat, backend.Namespace, backend.Name, port),
 			Weight: &wrapperspb.UInt32Value{Value: uint32(weight)},
 		}
 

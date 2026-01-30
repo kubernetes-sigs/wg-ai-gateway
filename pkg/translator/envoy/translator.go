@@ -8,7 +8,6 @@ import (
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	envoyproxytypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
-	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -22,6 +21,7 @@ import (
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 	gatewaylisters "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 
+	aigatewayv0alpha0 "sigs.k8s.io/wg-ai-gateway/api/v0alpha0"
 	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/k8s/client/listers/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/pkg/constants"
 )
@@ -36,13 +36,13 @@ type translator struct {
 	kubeClient    kubernetes.Interface
 	gatewayClient gatewayclientset.Interface
 
-	namespaceLister   corev1listers.NamespaceLister
-	serviceLister     corev1listers.ServiceLister
-	secretLister      corev1listers.SecretLister
+	namespaceLister     corev1listers.NamespaceLister
+	serviceLister       corev1listers.ServiceLister
+	secretLister        corev1listers.SecretLister
 	endpointSliceLister discoverylisters.EndpointSliceLister
-	gatewayLister     gatewaylisters.GatewayLister
-	httprouteLister   gatewaylisters.HTTPRouteLister
-	backendLister     aigatewaylisters.BackendLister
+	gatewayLister       gatewaylisters.GatewayLister
+	httprouteLister     gatewaylisters.HTTPRouteLister
+	backendLister       aigatewaylisters.BackendLister
 }
 
 // TODO: Implement translation logic
@@ -251,6 +251,39 @@ func (t *translator) validateHTTPRoute(
 	return parentStatuses, allAcceptingListeners
 }
 
+// buildEDSResources generates EDS resources for Kubernetes Service backends
+func (t *translator) buildEDSResources(allBackends []*aigatewayv0alpha0.Backend) ([]envoyproxytypes.Resource, error) {
+	var edsResources []envoyproxytypes.Resource
+
+	for _, backend := range allBackends {
+		// Only generate EDS for Kubernetes Service backends
+		if backend.Spec.Destination.Type != aigatewayv0alpha0.BackendTypeKubernetesService {
+			continue
+		}
+
+		// Determine the ports to create EDS for
+		var ports []uint32
+		if len(backend.Spec.Destination.Ports) > 0 {
+			for _, port := range backend.Spec.Destination.Ports {
+				ports = append(ports, port.Number)
+			}
+		} else {
+			ports = []uint32{80} // Default port
+		}
+
+		for _, port := range ports {
+			eds, err := t.generateEDSFromService(backend.Name, backend.Namespace, port)
+			if err != nil {
+				klog.Errorf("Failed to generate EDS for service %s/%s port %d: %v", backend.Namespace, backend.Name, port, err)
+				continue
+			}
+			edsResources = append(edsResources, eds)
+		}
+	}
+
+	return edsResources, nil
+}
+
 // Start with the gateway and accepted, validated routes and convert them into xDS resources.
 func (t *translator) buildXDSFromGatewayAndRoutes(
 	gateway *gatewayv1.Gateway,
@@ -259,9 +292,9 @@ func (t *translator) buildXDSFromGatewayAndRoutes(
 ) (map[resourcev3.Type][]envoyproxytypes.Resource, []gatewayv1.ListenerStatus, error) {
 
 	// Start building Envoy config using only the pre-validated and accepted routes
-	envoyRoutes := []envoyproxytypes.Resource{}
 	envoyClusters := make(map[string]envoyproxytypes.Resource)
 	allListenerStatuses := make(map[gatewayv1.SectionName]gatewayv1.ListenerStatus)
+	var allBackends []*aigatewayv0alpha0.Backend
 
 	// First, group each listener by port (there can be multiple listeners on the same port)
 	listenersByPort := make(map[int32][]gatewayv1.Listener)
@@ -274,13 +307,14 @@ func (t *translator) buildXDSFromGatewayAndRoutes(
 	finalEnvoyListeners := []*listenerv3.Listener{}
 	// For each port on the gateway, build an Envoy listener
 	for port, listeners := range listenersByPort {
-		envoyListener, listenerStatuses, err := t.buildEnvoyListenerForPort(gateway, port, listeners, routesByListener, parentStatuses, allListenerStatuses, listenerConflictConditions, envoyClusters, &envoyRoutes)
+		envoyListener, listenerStatuses, backends, err := t.buildEnvoyListenerForPort(gateway, port, listeners, routesByListener, parentStatuses, allListenerStatuses, listenerConflictConditions, envoyClusters)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to build listener for port %d: %w", port, err)
 		}
 		if envoyListener != nil {
 			finalEnvoyListeners = append(finalEnvoyListeners, envoyListener)
 		}
+		allBackends = append(allBackends, backends...)
 		// Update listener statuses
 		for _, ls := range listenerStatuses {
 			allListenerStatuses[ls.Name] = ls
@@ -305,10 +339,16 @@ func (t *translator) buildXDSFromGatewayAndRoutes(
 		orderedStatuses[i] = allListenerStatuses[listener.Name]
 	}
 
+	// Generate EDS resources for Kubernetes Service backends
+	edsResources, err := t.buildEDSResources(allBackends)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to build EDS resources: %w", err)
+	}
+
 	return map[resourcev3.Type][]envoyproxytypes.Resource{
 		resourcev3.ListenerType: listenerResources,
-		resourcev3.RouteType:    envoyRoutes,
 		resourcev3.ClusterType:  clustersSlice,
+		resourcev3.EndpointType: edsResources,
 	}, orderedStatuses, nil
 }
 
@@ -321,12 +361,11 @@ func (t *translator) buildEnvoyListenerForPort(
 	allListenerStatuses map[gatewayv1.SectionName]gatewayv1.ListenerStatus,
 	listenerConflictConditions map[gatewayv1.SectionName][]metav1.Condition,
 	envoyClusters map[string]envoyproxytypes.Resource,
-	envoyRoutes *[]envoyproxytypes.Resource,
-) (*listenerv3.Listener, []gatewayv1.ListenerStatus, error) {
+) (*listenerv3.Listener, []gatewayv1.ListenerStatus, []*aigatewayv0alpha0.Backend, error) {
 	var filterChains []*listenerv3.FilterChain
 	virtualHostsforPort := make(map[string]*routev3.VirtualHost)
-	routeName := fmt.Sprintf(constants.RouteNameFormat, port)
 	var listenerStatuses []gatewayv1.ListenerStatus
+	var allBackendsForListener []*aigatewayv0alpha0.Backend
 
 	// Generate a filter chain for each listener
 	for _, listener := range listeners {
@@ -343,6 +382,9 @@ func (t *translator) buildEnvoyListenerForPort(
 			for _, route := range routesByListener[listener.Name] {
 				routes, allValidBackends, resolvedRefsCondition := translateHTTPRouteToEnvoyRoutes(route, t.serviceLister, t.backendLister)
 
+				// Track backends for EDS generation
+				allBackendsForListener = append(allBackendsForListener, allValidBackends...)
+
 				// Update the route status with ResolvedRefs condition
 				key := types.NamespacedName{Name: route.Name, Namespace: route.Namespace}
 				currentParentStatuses := parentStatuses[key]
@@ -357,7 +399,7 @@ func (t *translator) buildEnvoyListenerForPort(
 				// Build clusters from backends
 				clusters, err := t.buildClustersFromBackends(allValidBackends)
 				if err != nil {
-					return nil, nil, fmt.Errorf("failed to build clusters from HTTPRoute %s/%s: %w", route.Namespace, route.Name, err)
+					return nil, nil, nil, fmt.Errorf("failed to build clusters from HTTPRoute %s/%s: %w", route.Namespace, route.Name, err)
 				}
 				for _, cluster := range clusters {
 					envoyClusters[cluster.Name] = cluster
@@ -383,7 +425,21 @@ func (t *translator) buildEnvoyListenerForPort(
 			}
 
 			// Create filter chain for this listener
-			filterChain, err := t.translateListenerToFilterChain(gateway, listener, routeName)
+			// Build route config first
+			allVirtualHosts := make([]*routev3.VirtualHost, 0, len(virtualHostsforPort))
+			for _, vh := range virtualHostsforPort {
+				// Sort routes by precedence
+				sortRoutes(vh.Routes)
+				allVirtualHosts = append(allVirtualHosts, vh)
+			}
+
+			// Create route configuration
+			routeConfig := &routev3.RouteConfiguration{
+				Name:                     fmt.Sprintf("listener_%s_routes", listener.Name),
+				VirtualHosts:             allVirtualHosts,
+			}
+
+			filterChain, err := t.translateListenerToFilterChain(gateway, listener, routeConfig)
 			if err != nil {
 				meta.SetStatusCondition(&listenerStatus.Conditions, metav1.Condition{
 					Type:               string(gatewayv1.ListenerConditionProgrammed),
@@ -419,22 +475,6 @@ func (t *translator) buildEnvoyListenerForPort(
 		listenerStatuses = append(listenerStatuses, *listenerStatus)
 	}
 
-	// Create RouteConfiguration (one per port group) with virtual hosts
-	allVirtualHosts := make([]*routev3.VirtualHost, 0, len(virtualHostsforPort))
-	for _, vh := range virtualHostsforPort {
-		// Sort routes by precedence
-		sortRoutes(vh.Routes)
-		allVirtualHosts = append(allVirtualHosts, vh)
-	}
-
-	// Create route configuration
-	routeConfig := &routev3.RouteConfiguration{
-		Name:                     routeName,
-		VirtualHosts:             allVirtualHosts,
-		IgnorePortInHostMatching: true,
-	}
-	*envoyRoutes = append(*envoyRoutes, routeConfig)
-
 	// Create Envoy Listener if there are any filter chains
 	if len(filterChains) > 0 {
 		envoyListener := &listenerv3.Listener{
@@ -442,10 +482,10 @@ func (t *translator) buildEnvoyListenerForPort(
 			Address:      t.createEnvoyAddress(uint32(port)),
 			FilterChains: filterChains,
 		}
-		return envoyListener, listenerStatuses, nil
+		return envoyListener, listenerStatuses, allBackendsForListener, nil
 	}
 
-	return nil, listenerStatuses, nil
+	return nil, listenerStatuses, allBackendsForListener, nil
 }
 
 // validateListener checks a single listener for conflicts and returns whether it is valid

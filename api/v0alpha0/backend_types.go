@@ -67,7 +67,8 @@ type BackendSpec struct {
 type BackendDestination struct {
 	// +required
 	Type BackendType `json:"type"`
-	// +optional
+	// +required
+	// +kubebuilder:validation:MinItems=1
 	Ports []BackendPort `json:"ports,omitempty"`
 	// +optional
 	FQDN *FQDNBackend `json:"fqdn,omitempty"`
