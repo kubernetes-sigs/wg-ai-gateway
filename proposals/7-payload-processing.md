@@ -185,11 +185,8 @@ over significant impact on data plane performance.
 
 
 `HTTPRoute` **rules** are the most specific level where we wish to prescribe Payload Processors.
-The amount of details and settings we need to support at the processor level is greater than what we can comfortable inline within a sub-object
-of `HTTPRoute` (See also how long `spec.rules.filters` can become on its own, today).
+The most straightforward and incremental appraoch woudld be to add support for payload processing as a filter at the rule level. Here is an example of what this may look like:
 
-The approach below creates a new custom resource kind for Payload Processing Pipelines.
-A minimal `HTTPRoute` that references a processor pipeline is shown below.
 
 ```yaml
 apiVersion: gateway.networking.k8s.io/v1
@@ -209,9 +206,45 @@ spec:
     backendRefs:
     - name: example-svc
       port: 8080
-    processing:
-    - name: prompt-injection-guardrails
-      pipelineRef:
+    filters:
+    - type: PayloadProcessing
+      payloadProcessing:
+      - name: guardrails
+        backendRefs:
+        - kind: Service
+          name: sql-injection-scanner
+        config:
+          timeout: "500ms"
+          failureMode: open | closed
+          # Context to send in gRPC(?) Metadata
+        context:
+          tenant_id: "customer-a"
+```
+
+
+If the amount of details and settings we need to support at the processor level is greater than what we want in-line within a `HTTPRoute`, or if we want to re-use a single set of payload processing constructs across multiple HTTPRoute rules, we can propose a reference to a re-usable custom resource. A minimal `HTTPRoute` that references a processor pipeline is shown below.
+
+```yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: example-httproute
+spec:
+  parentRefs:
+  - name: example-gateway
+  hostnames:
+  - "www.example.com"
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /query
+    backendRefs:
+    - name: example-svc
+      port: 8080
+    filters:
+    - type: PayloadProcessingRef
+      p]ayloadProcessingRef:
         name: prompt-injection-protection
 ---
 apiVersion: gateway.networking.k8s.io/v1alpha1
@@ -220,22 +253,15 @@ metadata:
   name: prompt-injection-protection
 spec:
   # Sequence of processors
-  processor:
+  processors:
   - name: malicious-prompt-prevention
-    # Indicates if this processor rule can mutate passed data
-    allowMutating: true
-    # Determines which parts of the request/response pair is of interest to the processor
-    phases: ["request-headers", "request-body", "response-headers", "response-body"]
-    # Defines the callout type, in this case it is backed by a service hosted on the cluster
-    endpointRef:
-      kind: Service
-      name: bad-prompt-detector
-    # Configuration for the callout itself
-    remoteConfig:
+    backendRefs:
+    - kind: Service
+      name: sql-injection-scanner
+    config:
       timeout: "250ms"
-      fail: open | closed
-      # Context to send in gRPC Metadata
-      context: 
+      failureMode: open | closed
+      context:
         tenant_id: "customer-a"
 ```
 
