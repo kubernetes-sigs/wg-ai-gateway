@@ -23,6 +23,8 @@ import (
 	"time"
 
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
+	apimeta "k8s.io/apimachinery/pkg/api/meta"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/wait"
@@ -34,6 +36,7 @@ import (
 	"k8s.io/client-go/tools/cache"
 	"k8s.io/client-go/util/workqueue"
 	"k8s.io/klog/v2"
+	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 	gatewayinformers "sigs.k8s.io/gateway-api/pkg/client/informers/externalversions"
 	gatewaylisters "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
@@ -158,9 +161,17 @@ func NewController(
 		aigatewayInformerFactory.Ainetworking().V0alpha0().Backends().Informer().HasSynced,
 	}
 
-	// The way we're going to structure this is to have
+	// Set up event handlers for Gateway API resources
 	if err := c.setupGatewayClassEventHandlers(gatewayInformerFactory.Gateway().V1().GatewayClasses()); err != nil {
 		return nil, fmt.Errorf("failed to setup gatewayclass event handlers: %w", err)
+	}
+
+	if err := c.setupGatewayEventHandlers(gatewayInformerFactory.Gateway().V1().Gateways()); err != nil {
+		return nil, fmt.Errorf("failed to setup gateway event handlers: %w", err)
+	}
+
+	if err := c.setupHTTPRouteEventHandlers(gatewayInformerFactory.Gateway().V1().HTTPRoutes()); err != nil {
+		return nil, fmt.Errorf("failed to setup httproute event handlers: %w", err)
 	}
 
 	return c, nil
@@ -256,9 +267,11 @@ func (c *controller) syncHandler(ctx context.Context, key string) error {
 	logger.Info("Reconciled gateway successfully")
 
 	// Translate Gateway to xDS resources.
-	resources, err := c.translator.TranslateGatewayAndReferencesToXDS(ctx, gateway)
+	resources, httpRouteStatuses, err := c.translator.TranslateGatewayAndReferencesToXDS(ctx, gateway)
 	if err != nil {
-		// TODO: Update Gateway status with the error.
+		if statusErr := c.updateGatewayStatus(ctx, gateway, metav1.ConditionFalse, "TranslationError", err.Error()); statusErr != nil {
+			logger.Error(statusErr, "failed to update gateway status with translation error")
+		}
 		return fmt.Errorf("failed to translate gateway to xDS resources: %w", err)
 	}
 
@@ -270,5 +283,106 @@ func (c *controller) syncHandler(ctx context.Context, key string) error {
 	}
 
 	logger.Info("Updated xDS server with new resources", "nodeID", deployer.NodeID())
+
+	// Update Gateway status to indicate successful programming
+	if err := c.updateGatewayStatus(ctx, gateway, metav1.ConditionTrue, "Programmed", "Gateway is programmed and ready"); err != nil {
+		logger.Error(err, "failed to update gateway status")
+		// Don't return error as the gateway is actually working
+	}
+
+	// Update HTTPRoute statuses
+	for httpRouteKey, parentStatuses := range httpRouteStatuses {
+		if err := c.updateHTTPRouteStatus(ctx, httpRouteKey, parentStatuses); err != nil {
+			logger.Error(err, "failed to update httproute status", "httproute", httpRouteKey)
+			// Don't return error as the routes are actually working
+		}
+	}
+
+	return nil
+}
+
+// updateGatewayStatus updates the Gateway status with the given condition.
+func (c *controller) updateGatewayStatus(ctx context.Context, gateway *gatewayv1.Gateway, status metav1.ConditionStatus, reason, message string) error {
+	// Create a copy to avoid modifying the cached object
+	gatewayCopy := gateway.DeepCopy()
+
+	// Set the Accepted condition
+	apimeta.SetStatusCondition(&gatewayCopy.Status.Conditions, metav1.Condition{
+		Type:               string(gatewayv1.GatewayConditionAccepted),
+		Status:             metav1.ConditionTrue,
+		Reason:             "Accepted",
+		Message:            "Gateway configuration is valid",
+		LastTransitionTime: metav1.Now(),
+	})
+
+	// Set the Programmed condition
+	apimeta.SetStatusCondition(&gatewayCopy.Status.Conditions, metav1.Condition{
+		Type:               string(gatewayv1.GatewayConditionProgrammed),
+		Status:             status,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: metav1.Now(),
+	})
+
+	// Set the address if the gateway is programmed successfully
+	if status == metav1.ConditionTrue {
+		// Find the LoadBalancer service for this gateway and get its external IP
+		deployer := envoydeployer.NewDeployer(
+			c.core.client,
+			c.core.dynamicClient,
+			gateway,
+			"", // image not needed for getting the service
+			c.core.configMapLister,
+			c.core.serviceAccountLister,
+			c.core.serviceLister,
+			c.core.deploymentLister,
+		)
+
+		// Try to get the service and extract the LoadBalancer IP
+		serviceName := deployer.NodeID()
+		service, err := c.core.serviceLister.Services(gateway.Namespace).Get(serviceName)
+		if err == nil && service.Spec.Type == "LoadBalancer" && len(service.Status.LoadBalancer.Ingress) > 0 {
+			// Set addresses from LoadBalancer ingress
+			gatewayCopy.Status.Addresses = []gatewayv1.GatewayStatusAddress{}
+			for _, ingress := range service.Status.LoadBalancer.Ingress {
+				if ingress.IP != "" {
+					gatewayCopy.Status.Addresses = append(gatewayCopy.Status.Addresses, gatewayv1.GatewayStatusAddress{
+						Type:  &[]gatewayv1.AddressType{gatewayv1.IPAddressType}[0],
+						Value: ingress.IP,
+					})
+				}
+			}
+		}
+	}
+
+	// Update the Gateway status
+	_, err := c.gateway.client.GatewayV1().Gateways(gateway.Namespace).UpdateStatus(ctx, gatewayCopy, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update gateway status: %w", err)
+	}
+
+	return nil
+}
+
+// updateHTTPRouteStatus updates the HTTPRoute status with the given parent statuses.
+func (c *controller) updateHTTPRouteStatus(ctx context.Context, httpRouteKey types.NamespacedName, parentStatuses []gatewayv1.RouteParentStatus) error {
+	// Get the current HTTPRoute
+	httpRoute, err := c.gateway.httpRouteLister.HTTPRoutes(httpRouteKey.Namespace).Get(httpRouteKey.Name)
+	if err != nil {
+		return fmt.Errorf("failed to get httproute: %w", err)
+	}
+
+	// Create a copy to avoid modifying the cached object
+	httpRouteCopy := httpRoute.DeepCopy()
+
+	// Set the parent statuses
+	httpRouteCopy.Status.Parents = parentStatuses
+
+	// Update the HTTPRoute status
+	_, err = c.gateway.client.GatewayV1().HTTPRoutes(httpRoute.Namespace).UpdateStatus(ctx, httpRouteCopy, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update httproute status: %w", err)
+	}
+
 	return nil
 }

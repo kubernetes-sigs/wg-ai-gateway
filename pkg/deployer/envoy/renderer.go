@@ -16,19 +16,21 @@ import (
 )
 
 var (
-	// go:embed templates/base.yaml.tpl
+	//go:embed templates/base.yaml.tpl
 	baseTemplate string
 
-	// go:embed templates/bootstrap.yaml.tpl
+	//go:embed templates/bootstrap.yaml.tpl
 	bootstrapTemplate string
 )
 
 type baseTemplateParams struct {
 	NodeID                    string
+	ResourceName              string
 	Namespace                 string
 	GatewayName               string
 	GatewayUID                string
 	EnvoyBootstrapCfgFileName string
+	EnvoyImage                string
 	Ports                     []corev1.ServicePort
 	Bootstrap                 string
 }
@@ -52,14 +54,20 @@ func renderBootstrap(cluster, nodeID string) (string, error) {
 }
 
 func renderBaseTemplateForGateway(nodeID string, gateway *gatewayv1.Gateway) ([]string, error) {
+	// Generate a descriptive resource name that includes the gateway name
+	resourceName := generateResourceName(gateway.Namespace, gateway.Name)
+
 	params := baseTemplateParams{
 		NodeID:                    nodeID,
+		ResourceName:              resourceName,
 		Namespace:                 gateway.Namespace,
 		GatewayName:               gateway.Name,
 		GatewayUID:                string(gateway.UID),
 		EnvoyBootstrapCfgFileName: constants.EnvoyBootstrapCfgFileName,
+		EnvoyImage:                constants.EnvoyImage,
 		Ports:                     extractServicePorts(*gateway),
 	}
+
 	bootstrap, err := renderBootstrap(types.NamespacedName{
 		Namespace: gateway.Namespace,
 		Name:      gateway.Name,
@@ -74,11 +82,28 @@ func renderBaseTemplateForGateway(nodeID string, gateway *gatewayv1.Gateway) ([]
 		return nil, err
 	}
 
-	return splitYAMLDocument(rendered), nil
+	result := splitYAMLDocument(rendered)
+	return result, nil
 }
 
 func renderTemplate(name, tpl string, params interface{}) (string, error) {
-	t, err := template.New(name).Parse(tpl)
+	funcMap := template.FuncMap{
+		"indent": func(spaces int, text string) string {
+			lines := strings.Split(text, "\n")
+			indent := strings.Repeat(" ", spaces)
+			for i := range lines {
+				if lines[i] != "" {
+					lines[i] = indent + lines[i]
+				}
+			}
+			return strings.Join(lines, "\n")
+		},
+		"quote": func(text string) string {
+			return fmt.Sprintf(`"%s"`, text)
+		},
+	}
+
+	t, err := template.New(name).Funcs(funcMap).Parse(tpl)
 	if err != nil {
 		return "", fmt.Errorf("error parsing template %s: %w", name, err)
 	}

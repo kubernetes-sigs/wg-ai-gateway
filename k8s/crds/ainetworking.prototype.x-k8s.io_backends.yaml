@@ -56,6 +56,15 @@ spec:
                     required:
                     - hostname
                     type: object
+                  ip:
+                    description: IPBackend describes an IP address backend.
+                    properties:
+                      address:
+                        description: Address is the IP address of the backend.
+                        type: string
+                    required:
+                    - address
+                    type: object
                   ports:
                     items:
                       properties:
@@ -91,9 +100,6 @@ spec:
                                   type: string
                               type: object
                           type: object
-                          x-kubernetes-validations:
-                          - message: exactly one of the fields in [mcp] must be set
-                            rule: '[has(self.mcp)].filter(x,x==true).size() == 1'
                         tls:
                           description: |-
                             TLS defines the TLS configuration that a client should use when talking to the backend.
@@ -225,6 +231,19 @@ spec:
                       type: object
                     minItems: 1
                     type: array
+                  service:
+                    description: ServiceBackend describes a Kubernetes Service backend.
+                    properties:
+                      name:
+                        description: Name is the name of the Service.
+                        type: string
+                      namespace:
+                        description: Namespace is the namespace of the Service.
+                        type: string
+                    required:
+                    - name
+                    - namespace
+                    type: object
                   type:
                     description: BackendType defines the type of the Backend destination.
                     enum:

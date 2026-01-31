@@ -2,12 +2,16 @@ package envoy
 
 import (
 	"fmt"
+	"time"
 
+	accesslogv3 "github.com/envoyproxy/go-control-plane/envoy/config/accesslog/v3"
 	clusterv3 "github.com/envoyproxy/go-control-plane/envoy/config/cluster/v3"
 	corev3 "github.com/envoyproxy/go-control-plane/envoy/config/core/v3"
 	endpointv3 "github.com/envoyproxy/go-control-plane/envoy/config/endpoint/v3"
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	fileaccesslogv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/access_loggers/file/v3"
+	routerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	hcmv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	transport_socketsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
@@ -20,6 +24,7 @@ import (
 
 	aigatewayv0alpha0 "sigs.k8s.io/wg-ai-gateway/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/pkg/constants"
+	"sigs.k8s.io/wg-ai-gateway/pkg/protoconv"
 )
 
 // buildClustersFromBackends creates Envoy clusters from Backend resources
@@ -121,6 +126,34 @@ func (t *translator) translateListenerToFilterChain(gateway *gatewayv1.Gateway, 
 		StatPrefix: fmt.Sprintf("gateway_%s_listener_%s", gateway.Name, listener.Name),
 		RouteSpecifier: &hcmv3.HttpConnectionManager_RouteConfig{
 			RouteConfig: routeConfig,
+		},
+		// Add HTTP filters - router is required for request routing
+		HttpFilters: []*hcmv3.HttpFilter{
+			{
+				Name: wellknown.Router,
+				ConfigType: &hcmv3.HttpFilter_TypedConfig{
+					TypedConfig: protoconv.MessageToAny(&routerv3.Router{}),
+				},
+			},
+		},
+		// Add proper timeout configurations
+		RequestTimeout:    durationpb.New(60 * time.Second), // 60s request timeout
+		StreamIdleTimeout: durationpb.New(15 * time.Second), // 15s stream idle timeout
+		DrainTimeout:      durationpb.New(15 * time.Second), // 15s drain timeout
+		// Enable access logging for debugging
+		AccessLog: []*accesslogv3.AccessLog{
+			{
+				Name: wellknown.FileAccessLog,
+				ConfigType: &accesslogv3.AccessLog_TypedConfig{
+					TypedConfig: func() *anypb.Any {
+						fileAccessLog := &fileaccesslogv3.FileAccessLog{
+							Path: "/dev/stdout",
+						}
+						any, _ := anypb.New(fileAccessLog)
+						return any
+					}(),
+				},
+			},
 		},
 	}
 

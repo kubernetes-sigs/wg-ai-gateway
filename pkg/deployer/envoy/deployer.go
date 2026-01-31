@@ -54,13 +54,14 @@ type listers struct {
 }
 
 type deployer struct {
-	kubeClient kubernetes.Interface
-	listers    *listers
-	gateway    *gatewayv1.Gateway
-	patcher    patcher
-	nodeID     string
-	image      string
-	namespace  string
+	kubeClient   kubernetes.Interface
+	listers      *listers
+	gateway      *gatewayv1.Gateway
+	patcher      patcher
+	nodeID       string
+	resourceName string
+	image        string
+	namespace    string
 }
 
 func NewDeployer(
@@ -74,10 +75,12 @@ func NewDeployer(
 	deploymentLister appsv1listers.DeploymentLister,
 ) Deployer {
 	return &deployer{
-		gateway:   gateway,
-		nodeID:    generateNodeID(gateway.Namespace, gateway.Name),
-		image:     image,
-		namespace: gateway.Namespace,
+		kubeClient:   kubeClient,
+		gateway:      gateway,
+		nodeID:       generateNodeID(gateway.Namespace, gateway.Name),
+		resourceName: generateResourceName(gateway.Namespace, gateway.Name),
+		image:        image,
+		namespace:    gateway.Namespace,
 		listers: &listers{
 			configMapLister:      configMapLister,
 			serviceAccountLister: serviceAccountLister,
@@ -105,6 +108,19 @@ func generateNodeID(namespace, name string) string {
 	return fmt.Sprintf(constants.ProxyNameFormat, hex.EncodeToString(hash[:6]))
 }
 
+// generateResourceName creates a descriptive name for Kubernetes resources based on gateway name
+func generateResourceName(namespace, name string) string {
+	// Create a descriptive name that includes the gateway name
+	// Use a sanitized version of the gateway name for Kubernetes resource naming
+	sanitizedName := strings.ReplaceAll(name, "_", "-")
+	sanitizedName = strings.ToLower(sanitizedName)
+
+	if namespace == "default" {
+		return fmt.Sprintf("envoy-%s", sanitizedName)
+	}
+	return fmt.Sprintf("envoy-%s-%s", namespace, sanitizedName)
+}
+
 func (d *deployer) NodeID() string {
 	return d.nodeID
 }
@@ -122,9 +138,9 @@ func (d *deployer) Deploy(ctx context.Context) error {
 }
 
 func (d *deployer) apply(ctx context.Context, manifest []string) error {
-	for _, resource := range manifest {
+	for i, resource := range manifest {
 		if err := d.applyOne(ctx, resource); err != nil {
-			return fmt.Errorf("error applying resource: %w", err)
+			return fmt.Errorf("error applying resource %d: %w", i, err)
 		}
 	}
 
@@ -137,24 +153,28 @@ func (d *deployer) apply(ctx context.Context, manifest []string) error {
 
 func (d *deployer) applyOne(ctx context.Context, resource string) error {
 	logger := klog.FromContext(ctx)
+
 	// First, convert the YAML manifest into an unstructured YAML map
 	data := map[string]any{}
 	err := yaml.Unmarshal([]byte(resource), &data)
 	if err != nil {
-		return err
+		logger.Error(err, "failed to unmarshal YAML", "yaml", resource)
+		return fmt.Errorf("failed to unmarshal YAML: %w", err)
 	}
 
 	// Then, use client-go's unstructured type to represent the resource
 	unstructuredObj := unstructured.Unstructured{Object: data}
+
 	// set managed label
 	clabel := strings.ReplaceAll(constants.EnvoyControllerName, "/", "-")
 	err = unstructured.SetNestedField(unstructuredObj.Object, clabel, "metadata", "labels", constants.ManagedGatewayLabel)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to set managed label: %w", err)
 	}
+
 	gvr, err := unstructuredToGVR(unstructuredObj)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to convert to GVR: %w", err)
 	}
 
 	canManage, resourceVersion := d.canManage(ctx, gvr, unstructuredObj.GetName(), unstructuredObj.GetNamespace())
@@ -162,14 +182,16 @@ func (d *deployer) applyOne(ctx context.Context, resource string) error {
 		logger.V(5).Info("skipping %v/%v/%v, already managed", gvr, unstructuredObj.GetName(), unstructuredObj.GetNamespace())
 		return nil
 	}
+
 	// Ensure our canManage assertion is not stale
 	unstructuredObj.SetResourceVersion(resourceVersion)
 
 	j, err := json.Marshal(unstructuredObj.Object)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to marshal to JSON: %w", err)
 	}
 	logger.V(5).Info("applying %v", string(j))
+
 	if err := d.patcher(gvr, unstructuredObj.GetName(), unstructuredObj.GetNamespace(), j); err != nil {
 		return fmt.Errorf("patch %v/%v/%v: %v", unstructuredObj.GroupVersionKind(), unstructuredObj.GetNamespace(), unstructuredObj.GetName(), err)
 	}
@@ -178,7 +200,6 @@ func (d *deployer) applyOne(ctx context.Context, resource string) error {
 }
 
 func (d *deployer) waitForGatewayReady(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
 	var wg sync.WaitGroup
 	wg.Go(func() {
 		err := d.waitForDeploymenAvailable(ctx)
@@ -193,15 +214,12 @@ func (d *deployer) waitForGatewayReady(ctx context.Context) error {
 		}
 	})
 	wg.Wait()
-	logger.Info("gateway resources are ready!")
 	return nil
 }
 
 func (d *deployer) waitForDeploymenAvailable(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
-	logger.Info("Waiting for envoy deployment to be available...")
 	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
-		dep, err := d.kubeClient.AppsV1().Deployments(d.namespace).Get(ctx, d.nodeID, metav1.GetOptions{})
+		dep, err := d.kubeClient.AppsV1().Deployments(d.namespace).Get(ctx, d.resourceName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -213,16 +231,14 @@ func (d *deployer) waitForDeploymenAvailable(ctx context.Context) error {
 		return false, nil
 	})
 	if err != nil {
-		return fmt.Errorf("waiting for envoy deployment %s to be available: %w", d.nodeID, err)
+		return fmt.Errorf("waiting for envoy deployment %s to be available: %w", d.resourceName, err)
 	}
 	return nil
 }
 
 func (d *deployer) waitForServiceReady(ctx context.Context) error {
-	logger := klog.FromContext(ctx)
-	logger.Info("Waiting for envoy service to be ready...")
 	err := wait.PollUntilContextTimeout(ctx, 2*time.Second, 1*time.Minute, true, func(ctx context.Context) (bool, error) {
-		svc, err := d.kubeClient.CoreV1().Services(d.namespace).Get(ctx, d.nodeID, metav1.GetOptions{})
+		svc, err := d.kubeClient.CoreV1().Services(d.namespace).Get(ctx, d.resourceName, metav1.GetOptions{})
 		if err != nil {
 			return false, err
 		}
@@ -232,7 +248,7 @@ func (d *deployer) waitForServiceReady(ctx context.Context) error {
 		return false, nil
 	})
 	if err != nil {
-		return fmt.Errorf("waiting for envoy service %s to be ready: %w", d.nodeID, err)
+		return fmt.Errorf("waiting for envoy service %s to be ready: %w", d.resourceName, err)
 	}
 	return nil
 }

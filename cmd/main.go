@@ -49,7 +49,7 @@ func init() {
 	flag.StringVar(&kubeconfig, "kubeconfig", "", "Path to a kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&apiServerURL, "apiserver-url", "", "The address of the Kubernetes API server. Overrides any value in kubeconfig. Only required if out-of-cluster.")
 	flag.StringVar(&envoyProxyImage, "envoy-image", "", "The Envoy proxy image to use for deployed proxies.")
-	flag.DurationVar(&resyncPeriod, "resync-period", 30*time.Second, "Resync period for informers.")
+	flag.DurationVar(&resyncPeriod, "resync-period", 0, "Resync period for informers. Typically set to zero")
 }
 
 func main() {

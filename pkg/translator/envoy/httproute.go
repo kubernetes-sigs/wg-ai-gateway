@@ -87,12 +87,12 @@ func translateHTTPRouteToEnvoyRoutes(
 			}
 
 			envoyRoute := &routev3.Route{
-				Name:                       fmt.Sprintf(constants.EnvoyRouteNameFormat, httpRoute.Namespace, httpRoute.Name, ruleIndex, matchIndex),
-				Match:                      routeMatch,
-				RequestHeadersToAdd:        requestHeadersToAdd,
-				RequestHeadersToRemove:     requestHeadersToRemove,
-				ResponseHeadersToAdd:       responseHeadersToAdd,
-				ResponseHeadersToRemove:    responseHeadersToRemove,
+				Name:                    fmt.Sprintf(constants.EnvoyRouteNameFormat, httpRoute.Namespace, httpRoute.Name, ruleIndex, matchIndex),
+				Match:                   routeMatch,
+				RequestHeadersToAdd:     requestHeadersToAdd,
+				RequestHeadersToRemove:  requestHeadersToRemove,
+				ResponseHeadersToAdd:    responseHeadersToAdd,
+				ResponseHeadersToRemove: responseHeadersToRemove,
 			}
 
 			if redirectAction != nil {

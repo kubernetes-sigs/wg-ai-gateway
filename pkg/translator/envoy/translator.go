@@ -6,8 +6,11 @@ import (
 
 	listenerv3 "github.com/envoyproxy/go-control-plane/envoy/config/listener/v3"
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
+	tlsinspector "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/listener/tls_inspector/v3"
 	envoyproxytypes "github.com/envoyproxy/go-control-plane/pkg/cache/types"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
+	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
+	"google.golang.org/protobuf/types/known/anypb"
 	"k8s.io/apimachinery/pkg/api/meta"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/labels"
@@ -29,7 +32,7 @@ import (
 // Inspired by https://github.com/kubernetes-sigs/kube-agentic-networking/blob/prototype/pkg/translator/translator.go
 
 type Translator interface {
-	TranslateGatewayAndReferencesToXDS(context.Context, *gatewayv1.Gateway) (map[resourcev3.Type][]envoyproxytypes.Resource, error)
+	TranslateGatewayAndReferencesToXDS(context.Context, *gatewayv1.Gateway) (map[resourcev3.Type][]envoyproxytypes.Resource, map[types.NamespacedName][]gatewayv1.RouteParentStatus, error)
 }
 
 type translator struct {
@@ -76,19 +79,18 @@ var (
 	)
 )
 
-func (t *translator) TranslateGatewayAndReferencesToXDS(ctx context.Context, gateway *gatewayv1.Gateway) (map[resourcev3.Type][]envoyproxytypes.Resource, error) {
+func (t *translator) TranslateGatewayAndReferencesToXDS(ctx context.Context, gateway *gatewayv1.Gateway) (map[resourcev3.Type][]envoyproxytypes.Resource, map[types.NamespacedName][]gatewayv1.RouteParentStatus, error) {
 	httpRoutesByListener, httpRouteStatuses, err := t.gatherRoutesAndParentStatusesForGateway(ctx, gateway)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	// TODO: Figure out what to do with route statuses
 	xdsResources, _, err := t.buildXDSFromGatewayAndRoutes(gateway, httpRoutesByListener, httpRouteStatuses)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return xdsResources, nil
+	return xdsResources, httpRouteStatuses, nil
 }
 
 func (t *translator) gatherRoutesAndParentStatusesForGateway(ctx context.Context, gateway *gatewayv1.Gateway) (map[gatewayv1.SectionName][]*gatewayv1.HTTPRoute, map[types.NamespacedName][]gatewayv1.RouteParentStatus, error) {
@@ -435,8 +437,8 @@ func (t *translator) buildEnvoyListenerForPort(
 
 			// Create route configuration
 			routeConfig := &routev3.RouteConfiguration{
-				Name:                     fmt.Sprintf("listener_%s_routes", listener.Name),
-				VirtualHosts:             allVirtualHosts,
+				Name:         fmt.Sprintf("listener_%s_routes", listener.Name),
+				VirtualHosts: allVirtualHosts,
 			}
 
 			filterChain, err := t.translateListenerToFilterChain(gateway, listener, routeConfig)
@@ -478,14 +480,27 @@ func (t *translator) buildEnvoyListenerForPort(
 	// Create Envoy Listener if there are any filter chains
 	if len(filterChains) > 0 {
 		envoyListener := &listenerv3.Listener{
-			Name:         fmt.Sprintf(constants.ListenerNameFormat, port),
-			Address:      t.createEnvoyAddress(uint32(port)),
-			FilterChains: filterChains,
+			Name:            fmt.Sprintf(constants.ListenerNameFormat, port),
+			Address:         t.createEnvoyAddress(uint32(port)),
+			FilterChains:    filterChains,
+			ListenerFilters: createListenerFilters(),
 		}
 		return envoyListener, listenerStatuses, allBackendsForListener, nil
 	}
 
 	return nil, listenerStatuses, allBackendsForListener, nil
+}
+
+func createListenerFilters() []*listenerv3.ListenerFilter {
+	tlsInspectorConfig, _ := anypb.New(&tlsinspector.TlsInspector{})
+	return []*listenerv3.ListenerFilter{
+		{
+			Name: wellknown.TlsInspector,
+			ConfigType: &listenerv3.ListenerFilter_TypedConfig{
+				TypedConfig: tlsInspectorConfig,
+			},
+		},
+	}
 }
 
 // validateListener checks a single listener for conflicts and returns whether it is valid

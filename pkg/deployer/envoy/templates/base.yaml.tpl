@@ -1,53 +1,60 @@
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ .NodeID }}
+  name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
   ownerReferences:
-    - apiVersion: v1
-      kind: Gateway
-      name: {{ .GatewayName }}
-      uid: {{ .GatewayUID }}
+  - apiVersion: gateway.networking.k8s.io/v1
+    kind: Gateway
+    name: {{ .GatewayName }}
+    uid: {{ .GatewayUID }}
 data:
   {{.EnvoyBootstrapCfgFileName}}: |
-    {{ .Bootstrap | indent 4 }}
+{{ .Bootstrap | indent 4 }}
 ---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: {{ .NodeID }}
+  name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
   ownerReferences:
-    - apiVersion: v1
-      kind: Gateway
-      name: {{ .GatewayName }}
-      uid: {{ .GatewayUID }}
+  - apiVersion: gateway.networking.k8s.io/v1
+    kind: Gateway
+    name: {{ .GatewayName }}
+    uid: {{ .GatewayUID }}
 ---
-apiVersion: v1
+apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: {{ .NodeID }}
+  name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
   ownerReferences:
-    - apiVersion: v1
-      kind: Gateway
-      name: {{ .GatewayName }}
-      uid: {{ .GatewayUID }}
+  - apiVersion: gateway.networking.k8s.io/v1
+    kind: Gateway
+    name: {{ .GatewayName }}
+    uid: {{ .GatewayUID }}
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: {{ .NodeID }}
+      app: {{ .ResourceName }}
   template:
     metadata:
       labels:
-        app: {{ .NodeID }}
+        app: {{ .ResourceName }}
     spec:
-      serviceAccountName: {{ .NodeID }}
+      serviceAccountName: {{ .ResourceName }}
       containers:
         - name: envoy
-          image: {{ .EnvoyImage }}\
-          command: ["envoy", "-c", "/etc/envoy/{{.EnvoyBootstrapCfgFileName}}", "--log-level", "debug"]
+          image: {{ .EnvoyImage }}
+          command: ["envoy", "-c", "/etc/envoy/{{.EnvoyBootstrapCfgFileName}}", "--log-level", "trace"]
+          resources:
+            limits:
+              cpu: "2000m"
+              memory: "1024Mi"
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
           volumeMounts:
             - name: envoy-bootstrap
               mountPath: /etc/envoy
@@ -55,23 +62,25 @@ spec:
       volumes:
         - name: envoy-bootstrap
           configMap:
-            name: {{ .NodeID }}
+            name: {{ .ResourceName }}
             items:
               - key: {{.EnvoyBootstrapCfgFileName}}
+                path: {{.EnvoyBootstrapCfgFileName}}
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: {{ .NodeID }}
+  name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
   ownerReferences:
-    - apiVersion: v1
-      kind: Gateway
-      name: {{ .GatewayName }}
-      uid: {{ .GatewayUID }}
+  - apiVersion: gateway.networking.k8s.io/v1
+    kind: Gateway
+    name: {{ .GatewayName }}
+    uid: {{ .GatewayUID }}
 spec:
+  type: LoadBalancer
   selector:
-    app: {{ .NodeID }}
+    app: {{ .ResourceName }}
   ports:
   {{- range $key, $val := .Ports }}
   - name: {{ $val.Name | quote }}

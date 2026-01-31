@@ -56,7 +56,7 @@ func (c *controller) syncGatewayClass(key string) {
 	}
 
 	// We only care about the GatewayClass that matches our controller name.
-	if gwc.Spec.ControllerName != constants.EnvoyBootstrapCfgFileName {
+	if gwc.Spec.ControllerName != constants.EnvoyControllerName {
 		klog.V(5).Infof("Ignoring GatewayClass %q with unknown controller name %q", key, gwc.Spec.ControllerName)
 		return
 	}

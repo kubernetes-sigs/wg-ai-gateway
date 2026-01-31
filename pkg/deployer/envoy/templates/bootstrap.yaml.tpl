@@ -5,6 +5,7 @@ node:
 dynamic_resources:
   ads_config:
     api_type: GRPC
+    transport_api_version: V3
     grpc_services:
     - envoy_grpc:
         cluster_name: xds_cluster

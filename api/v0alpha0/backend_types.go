@@ -72,8 +72,10 @@ type BackendDestination struct {
 	Ports []BackendPort `json:"ports,omitempty"`
 	// +optional
 	FQDN *FQDNBackend `json:"fqdn,omitempty"`
-	// Service *ServiceBackend `json:"service,omitempty"`
-	// IP *IPBackend `json:"ip,omitempty"`
+	// +optional
+	Service *ServiceBackend `json:"service,omitempty"`
+	// +optional
+	IP *IPBackend `json:"ip,omitempty"`
 }
 
 // BackendType defines the type of the Backend destination.
@@ -156,7 +158,6 @@ const (
 	BackendTLSModeMutual BackendTLSMode = "Mutual"
 )
 
-// +kubebuilder:validation:ExactlyOneOf=mcp
 type BackendProtocolOptions struct {
 	// +optional
 	MCP *MCPProtocolOptions `json:"mcp,omitempty"`
@@ -182,6 +183,23 @@ type FQDNBackend struct {
 	// Hostname of the backend service. Examples: "api.example.com"
 	// +required
 	Hostname string `json:"hostname"`
+}
+
+// ServiceBackend describes a Kubernetes Service backend.
+type ServiceBackend struct {
+	// Name is the name of the Service.
+	// +required
+	Name string `json:"name"`
+	// Namespace is the namespace of the Service.
+	// +required
+	Namespace string `json:"namespace"`
+}
+
+// IPBackend describes an IP address backend.
+type IPBackend struct {
+	// Address is the IP address of the backend.
+	// +required
+	Address string `json:"address"`
 }
 
 type BackendExtension struct {
