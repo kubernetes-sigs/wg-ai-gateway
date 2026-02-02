@@ -16,11 +16,11 @@ require (
 	k8s.io/klog/v2 v2.130.1
 	sigs.k8s.io/gateway-api v1.4.0
 	google.golang.org/protobuf v1.36.10
+	github.com/cncf/xds/go v0.0.0-20251110193048-8bfbf64dc13e
 )
 
 require (
 	cel.dev/expr v0.24.0 // indirect
-	github.com/cncf/xds/go v0.0.0-20251110193048-8bfbf64dc13e // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/emicklei/go-restful/v3 v3.13.0 // indirect
 	github.com/envoyproxy/go-control-plane/ratelimit v0.1.0 // indirect

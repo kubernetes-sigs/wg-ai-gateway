@@ -24,7 +24,6 @@ import (
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 	gatewaylisters "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 
-	aigatewayv0alpha0 "sigs.k8s.io/wg-ai-gateway/api/v0alpha0"
 	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/k8s/client/listers/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/pkg/constants"
 )
@@ -45,10 +44,9 @@ type translator struct {
 	endpointSliceLister discoverylisters.EndpointSliceLister
 	gatewayLister       gatewaylisters.GatewayLister
 	httprouteLister     gatewaylisters.HTTPRouteLister
-	backendLister       aigatewaylisters.BackendLister
+	backendLister       aigatewaylisters.XBackendDestinationLister
 }
 
-// TODO: Implement translation logic
 func New(
 	kubeClient kubernetes.Interface,
 	gatewayClient gatewayclientset.Interface,
@@ -58,7 +56,7 @@ func New(
 	endpointSliceLister discoverylisters.EndpointSliceLister,
 	gatewayLister gatewaylisters.GatewayLister,
 	httpRouteLister gatewaylisters.HTTPRouteLister,
-	backendLister aigatewaylisters.BackendLister,
+	backendLister aigatewaylisters.XBackendDestinationLister,
 ) Translator {
 	return &translator{
 		kubeClient:          kubeClient,
@@ -254,29 +252,29 @@ func (t *translator) validateHTTPRoute(
 }
 
 // buildEDSResources generates EDS resources for Kubernetes Service backends
-func (t *translator) buildEDSResources(allBackends []*aigatewayv0alpha0.Backend) ([]envoyproxytypes.Resource, error) {
+func (t *translator) buildEDSResources(allBackends []RouteBackend) ([]envoyproxytypes.Resource, error) {
 	var edsResources []envoyproxytypes.Resource
 
 	for _, backend := range allBackends {
 		// Only generate EDS for Kubernetes Service backends
-		if backend.Spec.Destination.Type != aigatewayv0alpha0.BackendTypeKubernetesService {
+		if backend.ResolutionType != RouteBackendResolutionTypeEDS {
 			continue
 		}
 
 		// Determine the ports to create EDS for
 		var ports []uint32
-		if len(backend.Spec.Destination.Ports) > 0 {
-			for _, port := range backend.Spec.Destination.Ports {
+		if len(backend.Ports) > 0 {
+			for _, port := range backend.Ports {
 				ports = append(ports, port.Number)
 			}
 		} else {
-			ports = []uint32{80} // Default port
+			return nil, fmt.Errorf("backend %s has no ports defined", backend.String())
 		}
 
 		for _, port := range ports {
-			eds, err := t.generateEDSFromService(backend.Name, backend.Namespace, port)
+			eds, err := t.generateEDSFromService(backend.ClusterName(), backend.Source.Namespace, port)
 			if err != nil {
-				klog.Errorf("Failed to generate EDS for service %s/%s port %d: %v", backend.Namespace, backend.Name, port, err)
+				klog.Errorf("Failed to generate EDS for backend %s port %d: %v", backend.String(), port, err)
 				continue
 			}
 			edsResources = append(edsResources, eds)
@@ -296,7 +294,7 @@ func (t *translator) buildXDSFromGatewayAndRoutes(
 	// Start building Envoy config using only the pre-validated and accepted routes
 	envoyClusters := make(map[string]envoyproxytypes.Resource)
 	allListenerStatuses := make(map[gatewayv1.SectionName]gatewayv1.ListenerStatus)
-	var allBackends []*aigatewayv0alpha0.Backend
+	var allBackends []RouteBackend
 
 	// First, group each listener by port (there can be multiple listeners on the same port)
 	listenersByPort := make(map[int32][]gatewayv1.Listener)
@@ -363,11 +361,11 @@ func (t *translator) buildEnvoyListenerForPort(
 	allListenerStatuses map[gatewayv1.SectionName]gatewayv1.ListenerStatus,
 	listenerConflictConditions map[gatewayv1.SectionName][]metav1.Condition,
 	envoyClusters map[string]envoyproxytypes.Resource,
-) (*listenerv3.Listener, []gatewayv1.ListenerStatus, []*aigatewayv0alpha0.Backend, error) {
+) (*listenerv3.Listener, []gatewayv1.ListenerStatus, []RouteBackend, error) {
 	var filterChains []*listenerv3.FilterChain
 	virtualHostsforPort := make(map[string]*routev3.VirtualHost)
 	var listenerStatuses []gatewayv1.ListenerStatus
-	var allBackendsForListener []*aigatewayv0alpha0.Backend
+	var allBackendsForListener []RouteBackend
 
 	// Generate a filter chain for each listener
 	for _, listener := range listeners {

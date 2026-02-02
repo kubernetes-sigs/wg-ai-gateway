@@ -22,31 +22,30 @@ import (
 	"k8s.io/apimachinery/pkg/labels"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	aigatewayv0alpha0 "sigs.k8s.io/wg-ai-gateway/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/pkg/constants"
 	"sigs.k8s.io/wg-ai-gateway/pkg/protoconv"
 )
 
 // buildClustersFromBackends creates Envoy clusters from Backend resources
 // Creates one cluster per port declared on each backend
-func (t *translator) buildClustersFromBackends(backends []*aigatewayv0alpha0.Backend) ([]*clusterv3.Cluster, error) {
+func (t *translator) buildClustersFromBackends(backends []RouteBackend) ([]*clusterv3.Cluster, error) {
 	var clusters []*clusterv3.Cluster
 
 	for _, backend := range backends {
 		// Determine the ports to create clusters for
 		var ports []uint32
-		if len(backend.Spec.Destination.Ports) > 0 {
+		if len(backend.Ports) > 0 {
 			// Use explicitly declared ports
-			for _, port := range backend.Spec.Destination.Ports {
+			for _, port := range backend.Ports {
 				ports = append(ports, port.Number)
 			}
 		} else {
-			return nil, fmt.Errorf("backend %s/%s has no ports defined", backend.Namespace, backend.Name)
+			return nil, fmt.Errorf("backend %s has no ports defined", backend.String())
 		}
 
 		// Create one cluster per port
 		for _, port := range ports {
-			clusterName := fmt.Sprintf(constants.ClusterNameFormat, backend.Namespace, backend.Name, port)
+			clusterName := fmt.Sprintf(constants.ClusterNameFormat, backend.Source.Namespace, backend.ClusterName(), port)
 
 			cluster := &clusterv3.Cluster{
 				Name:           clusterName,
@@ -54,17 +53,17 @@ func (t *translator) buildClustersFromBackends(backends []*aigatewayv0alpha0.Bac
 			}
 
 			// Configure the cluster based on the backend type
-			switch backend.Spec.Destination.Type {
-			case aigatewayv0alpha0.BackendTypeFqdn:
+			switch backend.ResolutionType {
+			case RouteBackendResolutionTypeDNS:
 				// For FQDN backends, use DNS discovery
 				cluster.ClusterDiscoveryType = &clusterv3.Cluster_Type{Type: clusterv3.Cluster_LOGICAL_DNS}
 				cluster.DnsLookupFamily = clusterv3.Cluster_V4_ONLY
-				if backend.Spec.Destination.FQDN == nil {
-					return nil, fmt.Errorf("backend %s/%s has type FQDN but no FQDN configuration", backend.Namespace, backend.Name)
+				if backend.Hostname == "" {
+					return nil, fmt.Errorf("backend %s has type FQDN but no FQDN configuration", backend.String())
 				}
-				cluster.LoadAssignment = t.createClusterLoadAssignment(clusterName, backend.Spec.Destination.FQDN.Hostname, port)
+				cluster.LoadAssignment = t.createClusterLoadAssignment(clusterName, backend.Hostname, port)
 
-			case aigatewayv0alpha0.BackendTypeKubernetesService:
+			case RouteBackendResolutionTypeEDS:
 				// For Kubernetes services, use EDS to get endpoints directly
 				cluster.ClusterDiscoveryType = &clusterv3.Cluster_Type{Type: clusterv3.Cluster_EDS}
 				cluster.EdsClusterConfig = &clusterv3.Cluster_EdsClusterConfig{
@@ -77,9 +76,6 @@ func (t *translator) buildClustersFromBackends(backends []*aigatewayv0alpha0.Bac
 					ServiceName: clusterName,
 				}
 				// No LoadAssignment needed - endpoints will come from EDS
-
-			default:
-				return nil, fmt.Errorf("unsupported backend type: %s", backend.Spec.Destination.Type)
 			}
 
 			clusters = append(clusters, cluster)

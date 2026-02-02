@@ -24,8 +24,8 @@ import (
 
 // Interface provides access to all the informers in this group version.
 type Interface interface {
-	// Backends returns a BackendInformer.
-	Backends() BackendInformer
+	// XBackendDestinations returns a XBackendDestinationInformer.
+	XBackendDestinations() XBackendDestinationInformer
 }
 
 type version struct {
@@ -39,7 +39,7 @@ func New(f internalinterfaces.SharedInformerFactory, namespace string, tweakList
 	return &version{factory: f, namespace: namespace, tweakListOptions: tweakListOptions}
 }
 
-// Backends returns a BackendInformer.
-func (v *version) Backends() BackendInformer {
-	return &backendInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
+// XBackendDestinations returns a XBackendDestinationInformer.
+func (v *version) XBackendDestinations() XBackendDestinationInformer {
+	return &xBackendDestinationInformer{factory: v.factory, namespace: v.namespace, tweakListOptions: v.tweakListOptions}
 }

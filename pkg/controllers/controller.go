@@ -82,7 +82,7 @@ type gatewayResources struct {
 type aiGatewayResources struct {
 	client aigatewayclientset.Interface
 
-	backendLister aigatewaylisters.BackendLister
+	backendLister aigatewaylisters.XBackendDestinationLister
 }
 
 type controller struct {
@@ -129,7 +129,7 @@ func NewController(
 		},
 		aigateway: &aiGatewayResources{
 			client:        aigatewayClient,
-			backendLister: aigatewayInformerFactory.Ainetworking().V0alpha0().Backends().Lister(),
+			backendLister: aigatewayInformerFactory.Ainetworking().V0alpha0().XBackendDestinations().Lister(),
 		},
 		stop:            ctx.Done(),
 		envoyProxyImage: envoyProxyImage,
@@ -147,7 +147,7 @@ func NewController(
 			kubeInformerFactory.Discovery().V1().EndpointSlices().Lister(),
 			gatewayInformerFactory.Gateway().V1().Gateways().Lister(),
 			gatewayInformerFactory.Gateway().V1().HTTPRoutes().Lister(),
-			aigatewayInformerFactory.Ainetworking().V0alpha0().Backends().Lister(),
+			aigatewayInformerFactory.Ainetworking().V0alpha0().XBackendDestinations().Lister(),
 		),
 	}
 
@@ -158,7 +158,7 @@ func NewController(
 		gatewayInformerFactory.Gateway().V1().GatewayClasses().Informer().HasSynced,
 		gatewayInformerFactory.Gateway().V1().Gateways().Informer().HasSynced,
 		gatewayInformerFactory.Gateway().V1().HTTPRoutes().Informer().HasSynced,
-		aigatewayInformerFactory.Ainetworking().V0alpha0().Backends().Informer().HasSynced,
+		aigatewayInformerFactory.Ainetworking().V0alpha0().XBackendDestinations().Informer().HasSynced,
 	}
 
 	// Set up event handlers for Gateway API resources

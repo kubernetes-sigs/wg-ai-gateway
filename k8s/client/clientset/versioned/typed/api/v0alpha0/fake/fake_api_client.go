@@ -28,8 +28,8 @@ type FakeAinetworkingV0alpha0 struct {
 	*testing.Fake
 }
 
-func (c *FakeAinetworkingV0alpha0) Backends(namespace string) v0alpha0.BackendInterface {
-	return newFakeBackends(c, namespace)
+func (c *FakeAinetworkingV0alpha0) XBackendDestinations(namespace string) v0alpha0.XBackendDestinationInterface {
+	return newFakeXBackendDestinations(c, namespace)
 }
 
 // RESTClient returns a RESTClient that is used to communicate

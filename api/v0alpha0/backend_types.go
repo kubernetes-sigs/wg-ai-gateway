@@ -27,32 +27,32 @@ import (
 // +genclient
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
-// Backend is the Schema for the backends API.
-type Backend struct {
+// XBackendDestination is the Schema for the backends API.
+type XBackendDestination struct {
 	metav1.TypeMeta `json:",inline"`
 	// metadata is a standard object metadata.
 	// +optional
 	metav1.ObjectMeta `json:"metadata"`
-	// spec defines the desired state of Backend.
+	// spec defines the desired state of XBackendDestination.
 	// +required
-	Spec BackendSpec `json:"spec"`
-	// status defines the observed state of Backend.
+	Spec XBackendDestinationSpec `json:"spec"`
+	// status defines the observed state of XBackendDestination.
 	// +optional
-	Status BackendStatus `json:"status"`
+	Status XBackendDestinationStatus `json:"status"`
 }
 
 // +kubebuilder:object:root=true
-// XBackendList contains a list of Backend.
-type BackendList struct {
+// XXBackendDestinationList contains a list of XBackendDestination.
+type XBackendDestinationList struct {
 	metav1.TypeMeta `json:",inline"`
 	// metadata is a standard list metadata.
 	// +optional
 	metav1.ListMeta `json:"metadata,omitempty"`
-	Items           []Backend `json:"items"`
+	Items           []XBackendDestination `json:"items"`
 }
 
-// BackendSpec defines the desired state of Backend.
-type BackendSpec struct {
+// XBackendDestinationSpec defines the desired state of XBackendDestination.
+type XBackendDestinationSpec struct {
 	// destination defines the backend destination to route traffic to.
 	// +required
 	Destination BackendDestination `json:"destination"`
@@ -61,9 +61,7 @@ type BackendSpec struct {
 	Extensions []BackendExtension `json:"extensions,omitempty"`
 }
 
-// TODO: Do we need the destination field or can we inline this all
-// in spec?
-// +kubebuilder:validation:ExactlyOneOf=fqdn;service;ip
+// +kubebuilder:validation:ExactlyOneOf=fqdn;service
 type BackendDestination struct {
 	// +required
 	Type BackendType `json:"type"`
@@ -74,33 +72,29 @@ type BackendDestination struct {
 	FQDN *FQDNBackend `json:"fqdn,omitempty"`
 	// +optional
 	Service *ServiceBackend `json:"service,omitempty"`
-	// +optional
-	IP *IPBackend `json:"ip,omitempty"`
 }
 
-// BackendType defines the type of the Backend destination.
-// +kubebuilder:validation:Enum=Fqdn;Ip;KubernetesService
+// BackendType defines the type of the XBackendDestination destination.
+// +kubebuilder:validation:Enum=Fqdn;Service
 type BackendType string
 
 const (
 	// Fqdn represents a fully qualified domain name.
 	BackendTypeFqdn BackendType = "Fqdn"
-	// Ip represents an IP address.
-	BackendTypeIp BackendType = "Ip"
-	// KubernetesService represents a Kubernetes Service.
-	BackendTypeKubernetesService BackendType = "KubernetesService"
+	// Service represents a Kubernetes Service.
+	BackendTypeService BackendType = "Service"
 )
 
 type BackendPort struct {
-	// Number defines the port number of the backend.
+	// Number defines the port number of the `XBackendDestination`.
 	// +required
 	// +kubebuilder:validation:Minimum=1
 	// +kubebuilder:validation:Maximum=65535
 	Number uint32 `json:"number"`
-	// Protocol defines the protocol of the backend.
+	// Protocol defines the protocol of the `XBackendDestination`.
 	// +required
 	Protocol BackendProtocol `json:"protocol"`
-	// TLS defines the TLS configuration that a client should use when talking to the backend.
+	// TLS defines the TLS configuration that a client should use when talking to the `XBackendDestination`.
 	// TODO: To prevent duplication on the part of the user, maybe this should be declared once at the
 	// top level with per-port overrides?
 	// +optional
@@ -122,7 +116,7 @@ const (
 )
 
 type BackendTLS struct {
-	// Mode defines the TLS mode for the backend.
+	// Mode defines the TLS mode for the XBackendDestination.
 	// +required
 	Mode BackendTLSMode `json:"mode"`
 	// SNI defines the server name indication to present to the upstream backend.
@@ -195,13 +189,6 @@ type ServiceBackend struct {
 	Namespace string `json:"namespace"`
 }
 
-// IPBackend describes an IP address backend.
-type IPBackend struct {
-	// Address is the IP address of the backend.
-	// +required
-	Address string `json:"address"`
-}
-
 type BackendExtension struct {
 	// +required
 	Name string `json:"name"`
@@ -213,18 +200,18 @@ type BackendExtension struct {
 	RawConfig *apiextensionsv1.JSON `json:"rawConfig,omitempty"`
 }
 
-// BackendStatus defines the observed state of Backend.
-type BackendStatus struct {
+// XBackendDestinationStatus defines the observed state of XBackendDestination.
+type XBackendDestinationStatus struct {
 	// Controllers is a list of controllers that are responsible for managing the InferencePoolImport.
 	//
 	// +listType=map
 	// +listMapKey=name
 	// +kubebuilder:validation:MaxItems=8
 	// +kubebuilder:validation:Required
-	Controllers []BackendControllerStatus `json:"controllers"`
+	Controllers []XBackendDestinationControllerStatus `json:"controllers"`
 }
 
-type BackendControllerStatus struct {
+type XBackendDestinationControllerStatus struct {
 	// Name is a domain/path string that indicates the name of the controller that manages the
 	// InferencePoolImport. Name corresponds to the GatewayClass controllerName field when the
 	// controller will manage parents of type "Gateway". Otherwise, the name is implementation-specific.
@@ -241,7 +228,7 @@ type BackendControllerStatus struct {
 	Name gateway.GatewayController `json:"name"`
 	// For Kubernetes API conventions, see:
 	// https://github.com/kubernetes/community/blob/master/contributors/devel/sig-architecture/api-conventions.md#typical-status-properties
-	// conditions represent the current state of the Backend resource.
+	// conditions represent the current state of the XBackendDestination resource.
 	// Each condition has a unique type and reflects the status of a specific aspect of the resource.
 	//
 	// Standard condition types include:

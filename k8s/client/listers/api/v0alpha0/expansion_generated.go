@@ -18,10 +18,10 @@ limitations under the License.
 
 package v0alpha0
 
-// BackendListerExpansion allows custom methods to be added to
-// BackendLister.
-type BackendListerExpansion interface{}
+// XBackendDestinationListerExpansion allows custom methods to be added to
+// XBackendDestinationLister.
+type XBackendDestinationListerExpansion interface{}
 
-// BackendNamespaceListerExpansion allows custom methods to be added to
-// BackendNamespaceLister.
-type BackendNamespaceListerExpansion interface{}
+// XBackendDestinationNamespaceListerExpansion allows custom methods to be added to
+// XBackendDestinationNamespaceLister.
+type XBackendDestinationNamespaceListerExpansion interface{}

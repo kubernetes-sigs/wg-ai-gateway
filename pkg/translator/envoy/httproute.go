@@ -10,15 +10,15 @@ import (
 	routev3 "github.com/envoyproxy/go-control-plane/envoy/config/route/v3"
 	matcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	"google.golang.org/protobuf/types/known/wrapperspb"
-	corev1 "k8s.io/api/core/v1"
+	v1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	corev1listers "k8s.io/client-go/listers/core/v1"
 	"k8s.io/klog/v2"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
-	aigatewayv0alpha0 "sigs.k8s.io/wg-ai-gateway/api/v0alpha0"
+	"sigs.k8s.io/wg-ai-gateway/api/v0alpha0"
 	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/k8s/client/listers/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/pkg/constants"
 )
@@ -29,16 +29,60 @@ type ControllerError struct {
 	Message string
 }
 
+// RouteBackend is an abstraction for a backend used in routing
+// TODO: Refactor this into a proper domain model representation
+type RouteBackend struct {
+	Source         *RouteBackendSource
+	Hostname       string
+	Ports          []RouteBackendPort
+	ResolutionType RouteBackendResolutionType
+}
+
+type RouteBackendResolutionType string
+
+const (
+	RouteBackendResolutionTypeDNS RouteBackendResolutionType = "DNS"
+	RouteBackendResolutionTypeEDS RouteBackendResolutionType = "EDS"
+)
+
+type RouteBackendPort struct {
+	Number       uint32
+	FrontendPort uint32 // only populated for k8s services
+	Protocol     v0alpha0.BackendProtocol
+	TLS          *v0alpha0.BackendTLS
+}
+
+type RouteBackendSource struct {
+	Kind      string
+	Name      string
+	Namespace string
+}
+
+func (rb *RouteBackend) ClusterName() string {
+	switch rb.Source.Kind {
+	case "Backend":
+		return rb.Source.Name
+	case "Service":
+		return fmt.Sprintf("synsvc-%s", rb.Source.Name)
+	default:
+		return rb.Source.Name
+	}
+}
+
+func (rb *RouteBackend) String() string {
+	return fmt.Sprintf("%s/%s (%s)", rb.Source.Namespace, rb.Source.Name, rb.Source.Kind)
+}
+
 func (e *ControllerError) Error() string {
 	return e.Message
 }
 func translateHTTPRouteToEnvoyRoutes(
 	httpRoute *gatewayv1.HTTPRoute,
 	serviceLister corev1listers.ServiceLister,
-	backendLister aigatewaylisters.BackendLister,
-) ([]*routev3.Route, []*aigatewayv0alpha0.Backend, metav1.Condition) {
+	backendLister aigatewaylisters.XBackendDestinationLister,
+) ([]*routev3.Route, []RouteBackend, metav1.Condition) {
 	var envoyRoutes []*routev3.Route
-	var allValidBackends []*aigatewayv0alpha0.Backend
+	var allValidBackends []RouteBackend
 	overallCondition := createSuccessCondition(httpRoute.Generation)
 
 	for ruleIndex, rule := range httpRoute.Spec.Rules {
@@ -350,17 +394,22 @@ func buildHTTPRouteAction(
 	namespace string,
 	backendRefs []gatewayv1.HTTPBackendRef,
 	serviceLister corev1listers.ServiceLister,
-	backendLister aigatewaylisters.BackendLister,
-) (*routev3.RouteAction, []*aigatewayv0alpha0.Backend, error) {
+	backendLister aigatewaylisters.XBackendDestinationLister,
+) (*routev3.RouteAction, []RouteBackend, error) {
 	weightedClusters := &routev3.WeightedCluster{}
-	var validBackends []*aigatewayv0alpha0.Backend
+	var validBackends []RouteBackend
 
 	for _, httpBackendRef := range backendRefs {
 		backend, err := fetchBackend(namespace, httpBackendRef.BackendRef, backendLister, serviceLister)
 		if err != nil {
 			return nil, nil, err
+		} else if backend == nil {
+			return nil, nil, &ControllerError{
+				Reason:  string(gatewayv1.RouteReasonBackendNotFound),
+				Message: fmt.Sprintf("Backend %s/%s could not be resolved", namespace, httpBackendRef.BackendRef.Name),
+			}
 		}
-		validBackends = append(validBackends, backend)
+		validBackends = append(validBackends, *backend)
 		weight := int32(1)
 		if httpBackendRef.Weight != nil {
 			weight = *httpBackendRef.Weight
@@ -370,22 +419,60 @@ func buildHTTPRouteAction(
 		}
 
 		// Generate the cluster name, accounting for port
-		var port uint32 = 80 // default port
-		// If the backend has specific ports configured, determine which port to use
-		if len(backend.Spec.Destination.Ports) > 0 {
-			// Use the first port (which should be the target port from HTTPRoute)
-			port = backend.Spec.Destination.Ports[0].Number
+		var port = httpBackendRef.BackendRef.Port
+		switch backend.Source.Kind {
+		case "Backend":
+			// For a Backend backendRef, the port is also required, but it corresponds to the targetPort instead
+			found := false
+			for _, p := range backend.Ports {
+				if p.Number == uint32(*port) {
+					targetPort := gatewayv1.PortNumber(p.Number)
+					port = &targetPort
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, nil, &ControllerError{
+					Reason:  string(gatewayv1.RouteReasonResolvedRefs),
+					Message: fmt.Sprintf("No targetPort %d found for Backend backend %s/%s", *port, backend.Source.Namespace, backend.Source.Name),
+				}
+			}
+		case "Service":
+			// For services, port is required; if not specified, return an error
+			if port == nil {
+				return nil, nil, &ControllerError{
+					Reason:  string(gatewayv1.RouteReasonResolvedRefs),
+					Message: fmt.Sprintf("Port must be specified for Service backend %s/%s", backend.Source.Namespace, backend.Source.Name),
+				}
+			}
+			// Since we know there is a port, find the corresponding targetPort (since that what Envoy will route to)
+			found := false
+			for _, p := range backend.Ports {
+				if p.FrontendPort == uint32(*port) {
+					targetPort := gatewayv1.PortNumber(p.Number) // Switch to the targetPort
+					port = &targetPort
+					found = true
+					break
+				}
+			}
+			if !found {
+				return nil, nil, &ControllerError{
+					Reason:  string(gatewayv1.RouteReasonResolvedRefs),
+					Message: fmt.Sprintf("No targetPort found for port %d for Service backend %s/%s", *port, backend.Source.Namespace, backend.Source.Name),
+				}
+			}
 		}
 
 		clusterWeight := &routev3.WeightedCluster_ClusterWeight{
-			Name:   fmt.Sprintf(constants.ClusterNameFormat, backend.Namespace, backend.Name, port),
+			Name:   fmt.Sprintf(constants.ClusterNameFormat, backend.Source.Namespace, backend.ClusterName(), port),
 			Weight: &wrapperspb.UInt32Value{Value: uint32(weight)},
 		}
 
 		// Handle hostname rewriting for FQDN backends
-		if backend.Spec.Destination.FQDN != nil {
+		if backend.ResolutionType == RouteBackendResolutionTypeDNS {
 			clusterWeight.HostRewriteSpecifier = &routev3.WeightedCluster_ClusterWeight_HostRewriteLiteral{
-				HostRewriteLiteral: backend.Spec.Destination.FQDN.Hostname,
+				HostRewriteLiteral: backend.Hostname,
 			}
 		}
 
@@ -412,9 +499,9 @@ func buildHTTPRouteAction(
 func fetchBackend(
 	namespace string,
 	backendRef gatewayv1.BackendRef,
-	backendLister aigatewaylisters.BackendLister,
+	backendLister aigatewaylisters.XBackendDestinationLister,
 	serviceLister corev1listers.ServiceLister,
-) (*aigatewayv0alpha0.Backend, error) {
+) (*RouteBackend, error) {
 	// Determine the namespace for the backend
 	backendNamespace := namespace
 	if backendRef.Namespace != nil {
@@ -425,7 +512,7 @@ func fetchBackend(
 	switch *backendRef.Kind {
 	case "Backend":
 		// Fetch the Backend resource
-		backend, err := backendLister.Backends(backendNamespace).Get(string(backendRef.Name))
+		backend, err := backendLister.XBackendDestinations(backendNamespace).Get(string(backendRef.Name))
 		if err != nil {
 			if apierrors.IsNotFound(err) {
 				return nil, &ControllerError{
@@ -435,7 +522,45 @@ func fetchBackend(
 			}
 			return nil, err
 		}
-		return backend, nil
+		var ports []RouteBackendPort
+		for _, port := range backend.Spec.Destination.Ports {
+			ports = append(ports, RouteBackendPort{
+				Number:   port.Number,
+				Protocol: port.Protocol,
+				TLS:      port.TLS,
+				// TODO: Handle protocol options
+			})
+		}
+		var hostname string
+		switch backend.Spec.Destination.Type {
+		case v0alpha0.BackendTypeFqdn:
+			hostname = backend.Spec.Destination.FQDN.Hostname
+		case v0alpha0.BackendTypeService:
+			svc := backend.Spec.Destination.Service
+			hostname = fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, backendNamespace)
+		default:
+			return nil, &ControllerError{
+				Reason:  string(gatewayv1.RouteReasonUnsupportedValue),
+				Message: fmt.Sprintf("unsupported backend type: %s", backend.Spec.Destination.Type),
+			}
+		}
+		var resolutionType RouteBackendResolutionType
+		switch backend.Spec.Destination.Type {
+		case v0alpha0.BackendTypeFqdn:
+			resolutionType = RouteBackendResolutionTypeDNS
+		case v0alpha0.BackendTypeService:
+			resolutionType = RouteBackendResolutionTypeEDS
+		}
+		return &RouteBackend{
+			Source: &RouteBackendSource{
+				Kind:      "Backend",
+				Name:      string(backendRef.Name),
+				Namespace: backendNamespace,
+			},
+			Hostname:       hostname,
+			Ports:          ports,
+			ResolutionType: resolutionType,
+		}, nil
 
 	case "Service":
 		// For Service backends, we need to validate the service exists and create a synthetic Backend
@@ -449,9 +574,54 @@ func fetchBackend(
 			}
 			return nil, err
 		}
-
-		// Create a synthetic Backend for the Service
-		return createSyntheticBackendFromService(svc, backendRef.Port), nil
+		hostname := fmt.Sprintf("%s.%s.svc.cluster.local", svc.Name, backendNamespace)
+		nameToPort := map[string]v1.ServicePort{}
+		for _, port := range svc.Spec.Ports {
+			if port.Name != "" {
+				nameToPort[port.Name] = port
+			}
+		}
+		var ports []RouteBackendPort
+		for _, port := range svc.Spec.Ports {
+			// TODO: Let's not support UDP for now
+			protocol := v0alpha0.BackendProtocolTCP
+			if port.AppProtocol != nil {
+				switch *port.AppProtocol {
+				case "http":
+					protocol = v0alpha0.BackendProtocolHTTP
+				case "http2":
+					protocol = v0alpha0.BackendProtocolHTTP2
+				case "mcp":
+					protocol = v0alpha0.BackendProtocolMCP
+				default:
+					klog.Warningf("Unsupported AppProtocol %s for Service %s/%s port %d, defaulting to TCP", *port.AppProtocol, backendNamespace, svc.Name, port.Port)
+				}
+			}
+			number := uint32(port.Port)
+			if port.TargetPort.Type == intstr.Int && port.TargetPort.IntValue() > 0 {
+				number = uint32(port.TargetPort.IntValue())
+			} else if port.TargetPort.Type == intstr.String {
+				klog.Warningf("Named TargetPort %s for Service %s/%s port %d not supported, skipping...", port.TargetPort.StrVal, backendNamespace, svc.Name, port.Port)
+				continue
+			}
+			port := RouteBackendPort{
+				Number:       number,
+				FrontendPort: uint32(port.Port),
+				Protocol:     protocol,
+				TLS:          nil, // TODO: Lookup relevant BackendTLSPolicies
+			}
+			ports = append(ports, port)
+		}
+		return &RouteBackend{
+			Source: &RouteBackendSource{
+				Kind:      "Service",
+				Name:      string(backendRef.Name),
+				Namespace: backendNamespace,
+			},
+			Hostname:       hostname,
+			Ports:          ports,
+			ResolutionType: RouteBackendResolutionTypeEDS,
+		}, nil
 
 	default:
 		return nil, &ControllerError{
@@ -459,43 +629,6 @@ func fetchBackend(
 			Message: fmt.Sprintf("unsupported backend kind: %s", *backendRef.Kind),
 		}
 	}
-}
-
-// createSyntheticBackendFromService creates a Backend resource representation from a Kubernetes Service
-func createSyntheticBackendFromService(svc *corev1.Service, port *gatewayv1.PortNumber) *aigatewayv0alpha0.Backend {
-	// This creates a synthetic Backend that represents the Kubernetes Service
-	// In a real implementation, you might want to cache these or handle them differently
-	backend := &aigatewayv0alpha0.Backend{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      svc.Name,
-			Namespace: svc.Namespace,
-			UID:       types.UID(fmt.Sprintf("synthetic-%s-%s", svc.Namespace, svc.Name)),
-		},
-		Spec: aigatewayv0alpha0.BackendSpec{
-			Destination: aigatewayv0alpha0.BackendDestination{
-				Type: aigatewayv0alpha0.BackendTypeKubernetesService,
-				// For a Service backend, we don't populate FQDN since it's cluster-internal
-			},
-		},
-	}
-
-	// If a specific port is requested, add it to the backend spec
-	if port != nil {
-		// Find the corresponding service port
-		for _, svcPort := range svc.Spec.Ports {
-			if svcPort.Port == int32(*port) {
-				backend.Spec.Destination.Ports = []aigatewayv0alpha0.BackendPort{
-					{
-						Number:   uint32(svcPort.Port),
-						Protocol: aigatewayv0alpha0.BackendProtocolHTTP, // Default to HTTP
-					},
-				}
-				break
-			}
-		}
-	}
-
-	return backend
 }
 
 // translateHTTPRouteMatch translates a Gateway API HTTPRouteMatch into an Envoy RouteMatch.
