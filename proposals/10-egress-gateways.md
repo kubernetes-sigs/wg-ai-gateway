@@ -199,7 +199,7 @@ One consequence of this approach is that `XBackendDestination` is not a suitable
 #### TLS Policy
 
 The example above inlines a basic TLS configuration directly on the `XBackendDestination` resource. This is intentional.
-Gateway API’s existing `XBackendDestinationTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. `XBackendDestinationTLSPolicy` also doesn't allow setting client certificates per backend; only once at `Gateway.spec.tls.backend`. This is overly restrictive for external FQDNs; no one "owns" a particular FQDN and can speak authoritatively about how every service in the cluster should talk to it. Generally speaking, the TLS field within `XBackendDestination` is meant to describe the TLS configuration that a client should use when talking to a backend. As the `XBackendDestination` resource shape stabilizes, we SHOULD evaluate whether `XBackendDestinationTLSPolicy` can be reused, extended, or aligned for external FQDN egress use cases.
+Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. `BackendTLSPolicy` also doesn't allow setting client certificates per backend; only once at `Gateway.spec.tls.backend`. This is overly restrictive for external FQDNs; no one "owns" a particular FQDN and can speak authoritatively about how every service in the cluster should talk to it. Generally speaking, the TLS field within `XBackendDestination` is meant to describe the TLS configuration that a client should use when talking to a backend. As the `XBackendDestination` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external FQDN egress use cases.
 
 ##### A note on the evolution of TLS within Gateway API
 
@@ -213,24 +213,24 @@ Today, the TLS story in Gateway API is [fractured](https://gateway-api.sigs.k8s.
     - Used to validate the client certificate in mTLS scenarios
 - `TLSRoute` allows users to specify how TLS should be handled on a per-route basis (Experimental)
   - Most useful for SNI-based routing in passthrough scenarios
-- `XBackendDestinationTLSPolicy` allows users to define TLS settings when connecting to backends (Standard)
+- `BackendTLSPolicy` allows users to define TLS settings when connecting to backends (Standard)
   - Specifically, validation context for the server certificates presented by upstream backends.
   - Allows setting SNI for backend connections.
   - Allows defining SANs.
 
 Note: more discussion on many of these fields can be found in [GEP 2907](https://gateway-api.sigs.k8s.io/geps/gep-2907/)
 
-The proposed `XBackendDestination` resource introduces yet another place to define TLS settings, and there is certainly a cost to further fragmenting the TLS story. At minimum, I believe an additional configuration point is needed for the egress gateway story simply because there is no standard egress story in Kubernetes. `Service` type `ExternalName` is the closest analogue, however, many organizations shy away from it completely due to cross-namespace security risks. Furthermore, naive usage of `ExternalName` can easily break SNI and TLS because the HTTP Host/:authority header will point to the cluster-internal FQDN rather than the external hostname. Clients would have to manually override the Host header and SNI or (or try to use `XBackendDestinationTLSPolicy` to set SNI but I think you still have the Host header problem). The `XBackendDestination` resource allows us to define a clear and unambiguous way to represent external FQDNs and how to connect to them securely.
+The proposed `XBackendDestination` resource introduces yet another place to define TLS settings, and there is certainly a cost to further fragmenting the TLS story. At minimum, I believe an additional configuration point is needed for the egress gateway story simply because there is no standard egress story in Kubernetes. `Service` type `ExternalName` is the closest analogue, however, many organizations shy away from it completely due to cross-namespace security risks. Furthermore, naive usage of `ExternalName` can easily break SNI and TLS because the HTTP Host/:authority header will point to the cluster-internal FQDN rather than the external hostname. Clients would have to manually override the Host header and SNI or (or try to use `BackendTLSPolicy` to set SNI but I think you still have the Host header problem). The `XBackendDestination` resource allows us to define a clear and unambiguous way to represent external FQDNs and how to connect to them securely.
 
-Things get murkier for `XBackendDestination`s of type `KubernetesService`. Despite the reasons for inline policy mentioned above, there is a strong argument for reusing `XBackendDestinationTLSPolicy` here to avoid duplication and user confusion. Perhaps there should be a separate resource for `ExternalFQDN` backends that allows inline TLS, while `KubernetesService` backends reuse `XBackendDestinationTLSPolicy`? Or maybe there should be another field within backend to mark a destination as being external (regardless of whether it's an FQDN or an IP)? We should certainly revisit those alternatives if we hit a wall in pursuing the current direction. In the interest of exploring this proposal fully and the cohesiveness of TLS within Gateway APi as a whole, I propoes the following guidelines for TLS policy:
+Things get murkier for `XBackendDestination`s of type `KubernetesService`. Despite the reasons for inline policy mentioned above, there is a strong argument for reusing `BackendTLSPolicy` here to avoid duplication and user confusion. Perhaps there should be a separate resource for `ExternalFQDN` backends that allows inline TLS, while `KubernetesService` backends reuse `BackendTLSPolicy`? Or maybe there should be another field within backend to mark a destination as being external (regardless of whether it's an FQDN or an IP)? We should certainly revisit those alternatives if we hit a wall in pursuing the current direction. In the interest of exploring this proposal fully and the cohesiveness of TLS within Gateway APi as a whole, I propoes the following guidelines for TLS policy:
 
 1. `Gateway.spec.listeners[].tls` remains the source of truth for incoming TLS connections to the Gateway.
 2. `Gateway.spec.tls.backend` is removed in favor of the `XBackendDestination` resource's TLS field
     1. `Gateway.spec.tls.frontend` remains for gateway-wide mTLS validation of incoming connections.
-3. `XBackendDestination` is explicitly disallowed as a targetRef for `XBackendDestinationTLSPolicy`
-4. We pursue aligning `XBackendDestinationTLSPolicy` and `XBackendDestination.spec.tls` as closely as possible w.r.t types.
-    1. There may be different semantics or defaults for different types of backends (FQDN vs Service) or resources (XBackendDestinationTLSPolicy), but the shape should be as similar as possible to avoid user confusion.
-    2. In the short term, if you don't need mTLS, users should prefer `XBackendDestinationTLSPolicy` for Kubernetes services.
+3. `XBackendDestination` is explicitly disallowed as a targetRef for `BackendTLSPolicy`
+4. We pursue aligning `BackendTLSPolicy` and `XBackendDestination.spec.tls` as closely as possible w.r.t types.
+    1. There may be different semantics or defaults for different types of backends (FQDN vs Service) or resources (BackendTLSPolicy), but the shape should be as similar as possible to avoid user confusion.
+    2. In the short term, if you don't need mTLS, users should prefer `BackendTLSPolicy` for Kubernetes services.
     3. We can revisit this recommendation as `XBackendDestination` and other decompositions of `Service` evolve.
 5. `TLSRoute` retains its current role as the way to express per-route TLS handling (e.g. SNI routing in passthrough mode).
 
@@ -263,7 +263,7 @@ While the namespaced ownership semantics of Kubernetes `Service`s are well-defin
 Realistically, both models have merit and are widely used across many gateway/mesh implementations. Prior art from the Network Policy subproject (i.e. `AdminNetworkPolicy` vs `NetworkPolicy`) suggests that both cluster-scoped and namespaced resources can coexist to serve different personas and use cases. We should consider whether:
 
 1. Whether `XBackendDestination` should be namespaced or cluster-scoped.
-2. Whether we should define both namespaced and cluster-scoped variants of `XBackendDestination` (e.g. `GlobalXBackendDestination` or `ClusterWideBakcend`)to serve different personas (service owners vs platform operators).
+2. Whether we should define both namespaced and cluster-scoped variants of `XBackendDestination` (e.g. `GlobalBackend` or `ClusterWideBackend`)to serve different personas (service owners vs platform operators).
 
 After multiple discussions, I am currently proposing making `XBackendDestination` a namespaced resource. This aligns with the idea of `XBackendDestination` being a consumer resource, where each namespace can define its own backends independently. One of the realizations that led me to this conclusion is that many of the admin use-cases for having a cluster-scoped `XBackendDestination` for external FQDNs can be reframed as making the cluster-admin the "service owner" of a (hypothetical) cluster-wide `Frontend` concept/resource. In other words, the cluser-admin would potentially be able to define a `Frontend` that represents a specific external service (e.g. *.openai.com) and configure TLS and other policies (authentication and authorization) that ensure clients are connecting to that `Frontend` in the way they expect (e.g. using certain certificates, with a proper SNI being set, etc). This `Frontend` could even have an optional `parentRef` to an egress gateway that, when combined with a `NetworkPolicy` enforces that all traffic to that or any `Frontend` must go through the egress gateway. While this entire flow is hypothetical and not in scope for this proposal, it does illustrate that cluster-scoped `XBackendDestination`s may not be strictly necessary to achieve the admin use-cases we are trying to solve for.
 
@@ -551,9 +551,9 @@ For inference and agentic workloads, the solution must support:
     - If implemented this way, it is strongly encouraged that the `XBackendDestination`'s configuration only applies to clients in the same namespace as the `XBackendDestination` resource to avoid cross-namespace policy conflicts.
     - Mesh implementations should consider proposing a cluster-wide `XBackendDestination` resource OR a `backendSelector` capability on a future `Frontend` resource to ease cross-namespace, cluster-wide usage.
 
-## What about XBackendDestinationTrafficPolicy?
+## What about BackendTrafficPolicy?
 
-Inlining TLS is discussed at length above, but a similar conversation should be had for the fields that current live in `XBackendDestinationTrafficPolicy`, such as connection timeouts, retries, and load balancing. This is less pressing since `XBackendDestinationTrafficPolicy` is still experimental, but we should decide whether or not we need both `XBackendDestinationTrafficPolicy` and `XBackendDestination` or if we can consolidate them.
+Inlining TLS is discussed at length above, but a similar conversation should be had for the fields that current live in `BackendTrafficPolicy`, such as connection timeouts, retries, and load balancing. This is less pressing since `BackendTrafficPolicy` is still experimental, but we should decide whether or not we need both `BackendTrafficPolicy` and `XBackendDestination` or if we can consolidate them.
 
 ## Next Steps
 
