@@ -9,7 +9,7 @@ const (
 
 	XDSServerPort = 15001
 
-	EnvoyControllerName = "sigs.k8s.io/aigateway-envoy-controller"
+	EnvoyControllerName = "sigs.k8s.io/wg-ai-gateway-envoy-controller"
 
 	ManagedGatewayLabel = "aigateway.networking.k8s.io/managed"
 

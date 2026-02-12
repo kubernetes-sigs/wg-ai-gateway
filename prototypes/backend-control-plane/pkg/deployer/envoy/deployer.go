@@ -129,7 +129,7 @@ func (d *deployer) Deploy(ctx context.Context) error {
 	logger := klog.FromContext(ctx).WithValues("gateway", klog.KRef(d.gateway.Namespace, d.gateway.Name), "nodeID", d.nodeID)
 	ctx = klog.NewContext(ctx, logger)
 
-	manifests, err := renderBaseTemplateForGateway(d.nodeID, d.gateway)
+	manifests, err := renderBaseTemplateForGateway(d.nodeID, d.gateway, d.image)
 	if err != nil {
 		return fmt.Errorf("failed to render base template for gateway %s/%s: %w", d.gateway.Namespace, d.gateway.Name, err)
 	}

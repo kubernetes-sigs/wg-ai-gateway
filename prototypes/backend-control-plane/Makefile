@@ -146,7 +146,7 @@ docker-build-local: ## Build and push docker image to local registry
 
 .PHONY: logs
 logs: ## Show controller logs
-	kubectl --context kind-wg-ai-gateway logs -l app.kubernetes.io/name=wg-ai-gateway -c manager --tail=100 -f
+	kubectl --context kind-wg-ai-gateway logs -l app.kubernetes.io/name=ai-gateway-controller -c manager --tail=100 -f
 
 .PHONY: example
 example: ## Apply example Gateway and HTTPRoute
@@ -155,7 +155,7 @@ example: ## Apply example Gateway and HTTPRoute
 # Run the controller locally
 .PHONY: run
 run: build ;$(info $(M)...Running controller locally.) @ ## Run the controller locally.
-	./bin/controller
+	./bin/manager
 
 # Install dependencies
 .PHONY: deps

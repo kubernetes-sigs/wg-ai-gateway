@@ -53,7 +53,7 @@ func renderBootstrap(cluster, nodeID string) (string, error) {
 	return renderTemplate(fmt.Sprintf("envoy-bootstrap-%s", nodeID), bootstrapTemplate, params)
 }
 
-func renderBaseTemplateForGateway(nodeID string, gateway *gatewayv1.Gateway) ([]string, error) {
+func renderBaseTemplateForGateway(nodeID string, gateway *gatewayv1.Gateway, image string) ([]string, error) {
 	// Generate a descriptive resource name that includes the gateway name
 	resourceName := generateResourceName(gateway.Namespace, gateway.Name)
 
@@ -64,7 +64,7 @@ func renderBaseTemplateForGateway(nodeID string, gateway *gatewayv1.Gateway) ([]
 		GatewayName:               gateway.Name,
 		GatewayUID:                string(gateway.UID),
 		EnvoyBootstrapCfgFileName: constants.EnvoyBootstrapCfgFileName,
-		EnvoyImage:                constants.EnvoyImage,
+		EnvoyImage:                image,
 		Ports:                     extractServicePorts(*gateway),
 	}
 
