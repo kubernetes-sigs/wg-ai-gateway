@@ -77,7 +77,7 @@ kind-cluster: ## Create a Kind cluster with local registry
 	@echo "Creating Kind cluster with local registry..."
 	@if ! docker ps | grep -q "kind-registry"; then \
 		docker network create kind || true; \
-		docker run -d --restart=always --name "kind-registry" --network=kind registry:2; \
+		docker run -d --restart=always -p 5000:5000 --name "kind-registry" --network=kind registry:2; \
 	else \
 		echo "Registry already running"; \
 	fi
@@ -93,7 +93,7 @@ registry-setup: ## Setup local registry for Kind
 	@echo "Setting up local registry in kind network..."
 	@if ! docker ps | grep -q "kind-registry"; then \
 		docker network create kind || true; \
-		docker run -d --restart=always --name "kind-registry" --network=kind registry:2; \
+		docker run -d --restart=always -p 5000:5000 --name "kind-registry" --network=kind registry:2; \
 	else \
 		echo "Registry already running"; \
 	fi
