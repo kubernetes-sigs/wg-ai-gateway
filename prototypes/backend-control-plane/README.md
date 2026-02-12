@@ -62,6 +62,21 @@ backend-control-plane/
 
 Cross-cutting Backend API types and generated clients live in `../internal/backend/`.
 
+## Demo scripts
+
+Automated scripts for the httpbin demo live in `demo/httpbin/`:
+
+```bash
+# Full setup: Kind cluster, controller, example resources
+./demo/httpbin/setup.sh
+
+# Test the happy path (port-forwards and curls /get)
+./demo/httpbin/test-happy-path.sh
+
+# Tear everything down
+./demo/httpbin/teardown.sh
+```
+
 ## Assumptions
 
 - Targets Kind clusters for local development (MetalLB provides LoadBalancer IPs)
