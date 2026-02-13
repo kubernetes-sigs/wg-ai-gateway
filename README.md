@@ -41,6 +41,8 @@ in `main` branch. This enables collaboration, experimentation, and knowledge sha
 
 However, this Working Group (WG) does not own or maintain production code. All code in this repository is provided strictly for PoC, experimentation, and discussion purposes only. It should not be considered production-ready, officially supported, or suitable for direct reuse in other projects.
 
+More details can be found in the [prototypes directory](/prototypes).
+
 Long term, proposals and any mature implementations originating from this WG are expected to move into appropriate Kubernetes subprojects or other relevant upstream repositories, where formal ownership and maintenance can be established.
 
 ## Community, discussions, contributions, and support
