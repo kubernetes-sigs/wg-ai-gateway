@@ -1,6 +1,6 @@
 # Payload Processing
 
-* Authors: @shaneutt, @kflynn, @shachartal 
+* Authors: @shaneutt, @kflynn, @shachartal
 * Status: Proposed
 
 # What?
@@ -174,7 +174,7 @@ Requirements:
 * Topology-Aware Routing (or similar constraints) are highly desirable when configuring Gateway consumption of Processors (both due to latency
 concerns, and also since cross-node/cross-AZ traffic may have cloud-networking costs associated with it).
 * Processor MAY support scale based on operational metrics from Gateway.
-* Processor MAY present indications of its capacity (or lack thereof) to Gateway. Gateway MAY support reducing the traffic 
+* Processor MAY present indications of its capacity (or lack thereof) to Gateway. Gateway MAY support reducing the traffic
 load on the Processor if such indications are presented. In some scenarios, the user MAY prefer degrading payload processing
 over significant impact on data plane performance.
 
@@ -195,7 +195,7 @@ metadata:
   name: example-httproute
 spec:
   parentRefs:
-  - name: example-gateway
+  - name: httpbin-gateway
   hostnames:
   - "www.example.com"
   rules:

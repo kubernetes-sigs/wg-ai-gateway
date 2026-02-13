@@ -1,0 +1,157 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ai-gateway-system
+  labels:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: namespace
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-gateway-controller
+  namespace: ai-gateway-system
+  labels:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: controller
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ai-gateway-controller
+  labels:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: controller
+rules:
+- apiGroups: [""]
+  resources: ["services", "endpoints", "namespaces", "secrets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["serviceaccounts"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["discovery.k8s.io"]
+  resources: ["endpointslices"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gateways", "httproutes", "gatewayclasses"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["gateway.networking.k8s.io"]
+  resources: ["gateways/status", "httproutes/status", "gatewayclasses/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["ainetworking.prototype.x-k8s.io"]
+  resources: ["backends", "xbackenddestinations"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["ainetworking.prototype.x-k8s.io"]
+  resources: ["backends/status", "xbackenddestinations/status"]
+  verbs: ["get", "update", "patch"]
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ai-gateway-controller
+  labels:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: controller
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ai-gateway-controller
+subjects:
+- kind: ServiceAccount
+  name: ai-gateway-controller
+  namespace: ai-gateway-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ai-gateway-controller
+  namespace: ai-gateway-system
+  labels:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-gateway-controller
+      app.kubernetes.io/component: controller
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ai-gateway-controller
+        app.kubernetes.io/component: controller
+    spec:
+      serviceAccountName: ai-gateway-controller
+      containers:
+      - name: manager
+        image: localhost:5000/wg-ai-gateway:latest
+        imagePullPolicy: Always
+        args:
+        - --envoy-image=envoyproxy/envoy:v1.37-latest
+        ports:
+        - containerPort: 15001
+          name: xds
+          protocol: TCP
+        env:
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        resources:
+          limits:
+            cpu: 500m
+            memory: 128Mi
+          requests:
+            cpu: 10m
+            memory: 64Mi
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+          readOnlyRootFilesystem: true
+          runAsNonRoot: true
+          runAsUser: 65532
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        fsGroup: 65532
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-gateway-controller
+  namespace: ai-gateway-system
+  labels:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: controller
+spec:
+  selector:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: controller
+  ports:
+  - name: xds
+    port: 15001
+    targetPort: 15001
+    protocol: TCP
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: wg-ai-gateway
+  labels:
+    app.kubernetes.io/name: ai-gateway-controller
+    app.kubernetes.io/component: gatewayclass
+spec:
+  controllerName: sigs.k8s.io/wg-ai-gateway-envoy-controller
+  description: "AI Gateway implementation of the Gateway API"

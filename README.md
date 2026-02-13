@@ -21,9 +21,8 @@ discussions and staging proposals which (generally) will be developed into
 proposals for specific Kubernetes Special Interest Groups (SIGs) and their
 sub-projects.
 
-[Gateway API]:https://gateway-api.sigs.k8s.io/
-[egress gateway]:/proposals/10-egress-gateways.md
-[payload processing]:/proposals/7-payload-processing.md
+**Any code contained in this repo is a prototype only and NOT suitable for anything resembling production**
+
 [README]:https://github.com/kubernetes/community/blob/master/wg-ai-gateway/README.md
 [Charter]:https://github.com/kubernetes/community/blob/master/wg-ai-gateway/charter.md
 
