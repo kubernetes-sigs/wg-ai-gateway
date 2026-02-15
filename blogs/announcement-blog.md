@@ -66,7 +66,7 @@ Key features include:
 ## Upcoming Events
 
 ### KubeCon + CloudNativeCon Europe 2026, Amsterdam
-We're thrilled that members of our working group will be presenting at [KubeCon + CloudNativeCon Europe](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/) and [Agentics Day: MCP + Agents](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/co-located-events/agentics-day-mcp-agents/) co-located event in Amsterdam, where we will present and discuss the problems at the intersection of AI and networking, including the WG's active proposals, as well as the intersection of AI gateways with Model Context Protocol and agent networking patterns.
+We're thrilled that members of our working group will be presenting at [KubeCon + CloudNativeCon Europe](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/) and [Agentics Day: MCP + Agents co-located event](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/co-located-events/agentics-day-mcp-agents/) in Amsterdam, where we will present and discuss the problems at the intersection of AI and networking, including the WG's active proposals, as well as the intersection of AI gateways with Model Context Protocol and agent networking patterns.
 This event will showcase how our proposals enable the infrastructure needed for next-generation AI deployments and multi-agent communication patterns.
 We’ll share the initial designs, early prototypes, and emerging directions shaping the WG’s roadmap.
 For more details see our sessions here:
@@ -85,4 +85,4 @@ To learn more:
 - Connect with us on [Slack (#wg-ai-gateway)](https://kubernetes.slack.com/messages/wg-ai-gateway)
 - Join the AI-Gateway [mailing list](https://groups.google.com/a/kubernetes.io/g/wg-ai-gateway)
 
-The future of AI infrastructure in Kubernetes is being built today, join us to learn how you can contribute and help shape the future of AI-aware gateway capabilities in Kubernetes
+The future of AI infrastructure in Kubernetes is being built today, join us to learn how you can contribute and help shape the future of AI-aware gateway capabilities in Kubernetes.
