@@ -57,10 +57,9 @@ backend-control-plane/
   config/
     controller.yaml Controller deployment manifest (RBAC, Deployment, Service)
     samples/        Example Gateway, Backend, and HTTPRoute manifests
+  backend/          Backend API types, CRDs, and generated K8s clients
   hack/             Development and verification scripts
 ```
-
-Cross-cutting Backend API types and generated clients live in `../internal/backend/`.
 
 ## Demo scripts
 

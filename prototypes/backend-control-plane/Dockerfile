@@ -13,11 +13,8 @@ COPY go.sum go.sum
 # and so that source changes don't invalidate our downloaded layer
 RUN go mod download
 
-# Copy cross-cutting code
-COPY internal/backend/api/ internal/backend/api/
-COPY internal/backend/k8s/ internal/backend/k8s/
-
-# Copy prototype-specific code
+# Copy prototype code
+COPY backend-control-plane/backend/ backend-control-plane/backend/
 COPY backend-control-plane/cmd/ backend-control-plane/cmd/
 COPY backend-control-plane/pkg/ backend-control-plane/pkg/
 

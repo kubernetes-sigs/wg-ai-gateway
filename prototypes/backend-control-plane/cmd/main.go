@@ -33,8 +33,8 @@ import (
 	gatewayclient "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 	gatewayinformers "sigs.k8s.io/gateway-api/pkg/client/informers/externalversions"
 
-	aigatewayclient "sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/k8s/client/clientset/versioned"
-	aigatewayinformers "sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/k8s/client/informers/externalversions"
+	aigatewayclient "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/clientset/versioned"
+	aigatewayinformers "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/informers/externalversions"
 	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/controllers"
 )
 

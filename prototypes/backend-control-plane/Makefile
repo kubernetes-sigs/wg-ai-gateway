@@ -18,12 +18,11 @@
 # Enable Go modules.
 export GO111MODULE=on
 
-# Cross-cutting paths (shared code lives in prototypes/internal/backend/)
 PROTOTYPE_ROOT := $(dir $(CURDIR))
-BACKEND_INTERNAL := $(PROTOTYPE_ROOT)internal/backend
-API_DIR := $(BACKEND_INTERNAL)/api
-CRD_DIR := $(BACKEND_INTERNAL)/k8s/crds
-CLIENT_OUTPUT_DIR := $(BACKEND_INTERNAL)/k8s/client
+BACKEND_DIR := $(CURDIR)/backend
+API_DIR := $(BACKEND_DIR)/api
+CRD_DIR := $(BACKEND_DIR)/k8s/crds
+CLIENT_OUTPUT_DIR := $(BACKEND_DIR)/k8s/client
 
 # Print the help menu.
 .PHONY: help
@@ -172,7 +171,7 @@ CODEGEN_PKG = $(shell cd $(PROTOTYPE_ROOT) && go env GOPATH)/pkg/mod/k8s.io/code
 CODEGEN_SCRIPT := $(CODEGEN_PKG)/kube_codegen.sh
 
 # The root Go package for your generated client code.
-CLIENT_OUTPUT_PKG := $(shell cd $(PROTOTYPE_ROOT) && go list -m)/internal/backend/k8s/client
+CLIENT_OUTPUT_PKG := $(shell cd $(PROTOTYPE_ROOT) && go list -m)/backend-control-plane/backend/k8s/client
 BOILERPLATE_FILE := hack/boilerplate/boilerplate.generatego.txt
 
 
@@ -200,7 +199,7 @@ clientsets: ## Generate clientsets, listers, and informers.
 		    --output-dir $(CLIENT_OUTPUT_DIR) \
 		    --output-pkg $(CLIENT_OUTPUT_PKG) \
 		    --boilerplate $(BOILERPLATE_FILE) \
-		    $(BACKEND_INTERNAL)/'
+		    $(BACKEND_DIR)/'
 
 .PHONY: register
 register: ## Generate register code for CRDs under api/v0alpha0
