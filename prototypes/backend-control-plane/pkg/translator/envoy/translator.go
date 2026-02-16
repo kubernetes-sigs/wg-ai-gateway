@@ -24,8 +24,8 @@ import (
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 	gatewaylisters "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 
+	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/listers/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/constants"
-	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/k8s/client/listers/api/v0alpha0"
 )
 
 // Inspired by https://github.com/kubernetes-sigs/kube-agentic-networking/blob/prototype/pkg/translator/translator.go

@@ -41,12 +41,12 @@ import (
 	gatewayinformers "sigs.k8s.io/gateway-api/pkg/client/informers/externalversions"
 	gatewaylisters "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 
+	aigatewayclientset "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/clientset/versioned"
+	aigatewayinformers "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/informers/externalversions"
+	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/listers/api/v0alpha0"
 	envoydeployer "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/deployer/envoy"
 	envoytranslator "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/translator/envoy"
 	envoycontrolplane "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/xds/envoy"
-	aigatewayclientset "sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/k8s/client/clientset/versioned"
-	aigatewayinformers "sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/k8s/client/informers/externalversions"
-	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/k8s/client/listers/api/v0alpha0"
 )
 
 const (

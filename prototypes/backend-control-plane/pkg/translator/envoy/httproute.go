@@ -18,9 +18,9 @@ import (
 	"k8s.io/klog/v2"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/api/v0alpha0"
+	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/listers/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/constants"
-	"sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/api/v0alpha0"
-	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/prototypes/internal/backend/k8s/client/listers/api/v0alpha0"
 )
 
 // ControllerError represents a structured error that can be used to set failure conditions
