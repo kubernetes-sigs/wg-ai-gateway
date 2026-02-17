@@ -169,6 +169,18 @@ func translateHTTPRouteToEnvoyRoutes(
 					routeAction.HostRewriteSpecifier = urlRewriteAction.HostRewriteSpecifier
 					routeAction.RegexRewrite = urlRewriteAction.RegexRewrite
 					routeAction.PrefixRewrite = urlRewriteAction.PrefixRewrite
+
+					// When PrefixRewrite is used with PathSeparatedPrefix, Envoy replaces
+					// only the prefix without the path separator, causing double-slash
+					// issues (e.g., path_separated_prefix="/vllm" + prefix_rewrite="/"
+					// turns /vllm/v1/chat/completions into //v1/chat/completions).
+					// Switch to regular Prefix match which includes the trailing slash so
+					// Envoy replaces the full prefix including the separator.
+					if routeAction.PrefixRewrite != "" {
+						if psp := routeMatch.GetPathSeparatedPrefix(); psp != "" {
+							routeMatch.PathSpecifier = &routev3.RouteMatch_Prefix{Prefix: psp + "/"}
+						}
+					}
 				}
 
 				envoyRoute.Action = &routev3.Route_Route{
