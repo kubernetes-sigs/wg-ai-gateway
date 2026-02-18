@@ -76,7 +76,7 @@ func (t *translator) buildClustersFromBackends(backends []RouteBackend) ([]*clus
 
 			// Configure upstream TLS if specified on this port
 			if port.TLS != nil && port.TLS.Mode != v0alpha0.BackendTLSModeNone {
-				transportSocket, err := t.buildUpstreamTransportSocket(port.TLS, backend.Hostname, port.Protocol)
+				transportSocket, err := t.buildUpstreamTransportSocket(port.TLS, backend.Hostname, port.Protocol, backend.Source.Namespace)
 				if err != nil {
 					return nil, fmt.Errorf("failed to build TLS transport socket for backend %s port %d: %w",
 						backend.String(), port.Number, err)
@@ -121,8 +121,8 @@ func (t *translator) createClusterLoadAssignment(clusterName, serviceHost string
 }
 
 // buildUpstreamTransportSocket wraps an UpstreamTlsContext in a TransportSocket.
-func (t *translator) buildUpstreamTransportSocket(tlsConfig *v0alpha0.BackendTLS, hostname string, protocol v0alpha0.BackendProtocol) (*corev3.TransportSocket, error) {
-	tlsContext, err := t.buildUpstreamTLSContext(tlsConfig, hostname, protocol)
+func (t *translator) buildUpstreamTransportSocket(tlsConfig *v0alpha0.BackendTLS, hostname string, protocol v0alpha0.BackendProtocol, defaultNamespace string) (*corev3.TransportSocket, error) {
+	tlsContext, err := t.buildUpstreamTLSContext(tlsConfig, hostname, protocol, defaultNamespace)
 	if err != nil {
 		return nil, err
 	}
@@ -139,7 +139,7 @@ func (t *translator) buildUpstreamTransportSocket(tlsConfig *v0alpha0.BackendTLS
 }
 
 // buildUpstreamTLSContext maps BackendTLS configuration to an Envoy UpstreamTlsContext.
-func (t *translator) buildUpstreamTLSContext(tlsConfig *v0alpha0.BackendTLS, hostname string, protocol v0alpha0.BackendProtocol) (*transport_socketsv3.UpstreamTlsContext, error) {
+func (t *translator) buildUpstreamTLSContext(tlsConfig *v0alpha0.BackendTLS, hostname string, protocol v0alpha0.BackendProtocol, defaultNamespace string) (*transport_socketsv3.UpstreamTlsContext, error) {
 	tlsContext := &transport_socketsv3.UpstreamTlsContext{}
 
 	// Set SNI: explicit field takes precedence, fall back to backend hostname
@@ -169,7 +169,7 @@ func (t *translator) buildUpstreamTLSContext(tlsConfig *v0alpha0.BackendTLS, hos
 	}
 
 	if len(tlsConfig.CaBundleRef) > 0 {
-		caBytes, err := t.resolveCABundle(tlsConfig.CaBundleRef, "default")
+		caBytes, err := t.resolveCABundle(tlsConfig.CaBundleRef, defaultNamespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve CA bundle: %w", err)
 		}
@@ -205,7 +205,7 @@ func (t *translator) buildUpstreamTLSContext(tlsConfig *v0alpha0.BackendTLS, hos
 
 	// Handle mutual TLS: attach client certificate
 	if tlsConfig.Mode == v0alpha0.BackendTLSModeMutual && tlsConfig.ClientCertificateRef != nil {
-		clientCert, err := t.resolveClientCertificate(tlsConfig.ClientCertificateRef, "default")
+		clientCert, err := t.resolveClientCertificate(tlsConfig.ClientCertificateRef, defaultNamespace)
 		if err != nil {
 			return nil, fmt.Errorf("failed to resolve client certificate: %w", err)
 		}
