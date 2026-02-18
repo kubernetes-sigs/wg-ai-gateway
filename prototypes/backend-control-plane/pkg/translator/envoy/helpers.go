@@ -14,14 +14,17 @@ import (
 	routerv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/http/router/v3"
 	hcmv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/filters/network/http_connection_manager/v3"
 	transport_socketsv3 "github.com/envoyproxy/go-control-plane/envoy/extensions/transport_sockets/tls/v3"
+	matcherv3 "github.com/envoyproxy/go-control-plane/envoy/type/matcher/v3"
 	resourcev3 "github.com/envoyproxy/go-control-plane/pkg/resource/v3"
 	"github.com/envoyproxy/go-control-plane/pkg/wellknown"
 	"google.golang.org/protobuf/types/known/anypb"
 	"google.golang.org/protobuf/types/known/durationpb"
+	corev1 "k8s.io/api/core/v1"
 	discoveryv1 "k8s.io/api/discovery/v1"
 	"k8s.io/apimachinery/pkg/labels"
 	gatewayv1 "sigs.k8s.io/gateway-api/apis/v1"
 
+	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/constants"
 	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/protoconv"
 )
@@ -32,20 +35,13 @@ func (t *translator) buildClustersFromBackends(backends []RouteBackend) ([]*clus
 	var clusters []*clusterv3.Cluster
 
 	for _, backend := range backends {
-		// Determine the ports to create clusters for
-		var ports []uint32
-		if len(backend.Ports) > 0 {
-			// Use explicitly declared ports
-			for _, port := range backend.Ports {
-				ports = append(ports, port.Number)
-			}
-		} else {
+		if len(backend.Ports) == 0 {
 			return nil, fmt.Errorf("backend %s has no ports defined", backend.String())
 		}
 
 		// Create one cluster per port
-		for _, port := range ports {
-			clusterName := fmt.Sprintf(constants.ClusterNameFormat, backend.Source.Namespace, backend.ClusterName(), port)
+		for _, port := range backend.Ports {
+			clusterName := fmt.Sprintf(constants.ClusterNameFormat, backend.Source.Namespace, backend.ClusterName(), port.Number)
 
 			cluster := &clusterv3.Cluster{
 				Name:           clusterName,
@@ -61,7 +57,7 @@ func (t *translator) buildClustersFromBackends(backends []RouteBackend) ([]*clus
 				if backend.Hostname == "" {
 					return nil, fmt.Errorf("backend %s has type FQDN but no FQDN configuration", backend.String())
 				}
-				cluster.LoadAssignment = t.createClusterLoadAssignment(clusterName, backend.Hostname, port)
+				cluster.LoadAssignment = t.createClusterLoadAssignment(clusterName, backend.Hostname, port.Number)
 
 			case RouteBackendResolutionTypeEDS:
 				// For Kubernetes services, use EDS to get endpoints directly
@@ -76,6 +72,16 @@ func (t *translator) buildClustersFromBackends(backends []RouteBackend) ([]*clus
 					ServiceName: clusterName,
 				}
 				// No LoadAssignment needed - endpoints will come from EDS
+			}
+
+			// Configure upstream TLS if specified on this port
+			if port.TLS != nil && port.TLS.Mode != v0alpha0.BackendTLSModeNone {
+				transportSocket, err := t.buildUpstreamTransportSocket(port.TLS, backend.Hostname, port.Protocol)
+				if err != nil {
+					return nil, fmt.Errorf("failed to build TLS transport socket for backend %s port %d: %w",
+						backend.String(), port.Number, err)
+				}
+				cluster.TransportSocket = transportSocket
 			}
 
 			clusters = append(clusters, cluster)
@@ -112,6 +118,155 @@ func (t *translator) createClusterLoadAssignment(clusterName, serviceHost string
 			},
 		},
 	}
+}
+
+// buildUpstreamTransportSocket wraps an UpstreamTlsContext in a TransportSocket.
+func (t *translator) buildUpstreamTransportSocket(tlsConfig *v0alpha0.BackendTLS, hostname string, protocol v0alpha0.BackendProtocol) (*corev3.TransportSocket, error) {
+	tlsContext, err := t.buildUpstreamTLSContext(tlsConfig, hostname, protocol)
+	if err != nil {
+		return nil, err
+	}
+	tlsAny, err := anypb.New(tlsContext)
+	if err != nil {
+		return nil, fmt.Errorf("failed to serialize upstream TLS context: %w", err)
+	}
+	return &corev3.TransportSocket{
+		Name: wellknown.TransportSocketTLS,
+		ConfigType: &corev3.TransportSocket_TypedConfig{
+			TypedConfig: tlsAny,
+		},
+	}, nil
+}
+
+// buildUpstreamTLSContext maps BackendTLS configuration to an Envoy UpstreamTlsContext.
+func (t *translator) buildUpstreamTLSContext(tlsConfig *v0alpha0.BackendTLS, hostname string, protocol v0alpha0.BackendProtocol) (*transport_socketsv3.UpstreamTlsContext, error) {
+	tlsContext := &transport_socketsv3.UpstreamTlsContext{}
+
+	// Set SNI: explicit field takes precedence, fall back to backend hostname
+	if tlsConfig.SNI != "" {
+		tlsContext.Sni = tlsConfig.SNI
+	} else if hostname != "" {
+		tlsContext.Sni = hostname
+	}
+
+	commonTLS := &transport_socketsv3.CommonTlsContext{}
+
+	// Set ALPN based on backend protocol
+	switch protocol {
+	case v0alpha0.BackendProtocolHTTP2:
+		commonTLS.AlpnProtocols = []string{"h2", "http/1.1"}
+	case v0alpha0.BackendProtocolHTTP:
+		commonTLS.AlpnProtocols = []string{"http/1.1"}
+	}
+
+	// Configure server certificate validation
+	validationContext := &transport_socketsv3.CertificateValidationContext{}
+	hasValidation := false
+
+	if tlsConfig.InsecureSkipVerify != nil && *tlsConfig.InsecureSkipVerify {
+		validationContext.TrustChainVerification = transport_socketsv3.CertificateValidationContext_ACCEPT_UNTRUSTED
+		hasValidation = true
+	}
+
+	if len(tlsConfig.CaBundleRef) > 0 {
+		caBytes, err := t.resolveCABundle(tlsConfig.CaBundleRef, "default")
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve CA bundle: %w", err)
+		}
+		validationContext.TrustedCa = &corev3.DataSource{
+			Specifier: &corev3.DataSource_InlineBytes{
+				InlineBytes: caBytes,
+			},
+		}
+		hasValidation = true
+	}
+
+	if len(tlsConfig.SubjectAltNames) > 0 {
+		for _, san := range tlsConfig.SubjectAltNames {
+			validationContext.MatchTypedSubjectAltNames = append(validationContext.MatchTypedSubjectAltNames,
+				&transport_socketsv3.SubjectAltNameMatcher{
+					SanType: transport_socketsv3.SubjectAltNameMatcher_DNS,
+					Matcher: &matcherv3.StringMatcher{
+						MatchPattern: &matcherv3.StringMatcher_Exact{
+							Exact: san,
+						},
+					},
+				},
+			)
+		}
+		hasValidation = true
+	}
+
+	if hasValidation {
+		commonTLS.ValidationContextType = &transport_socketsv3.CommonTlsContext_ValidationContext{
+			ValidationContext: validationContext,
+		}
+	}
+
+	// Handle mutual TLS: attach client certificate
+	if tlsConfig.Mode == v0alpha0.BackendTLSModeMutual && tlsConfig.ClientCertificateRef != nil {
+		clientCert, err := t.resolveClientCertificate(tlsConfig.ClientCertificateRef, "default")
+		if err != nil {
+			return nil, fmt.Errorf("failed to resolve client certificate: %w", err)
+		}
+		commonTLS.TlsCertificates = []*transport_socketsv3.TlsCertificate{clientCert}
+	}
+
+	tlsContext.CommonTlsContext = commonTLS
+	return tlsContext, nil
+}
+
+// resolveCABundle resolves ObjectReferences to concatenated PEM-encoded CA certificate bytes.
+func (t *translator) resolveCABundle(refs []gatewayv1.ObjectReference, defaultNamespace string) ([]byte, error) {
+	var allPEM []byte
+	for _, ref := range refs {
+		namespace := defaultNamespace
+		if ref.Namespace != nil {
+			namespace = string(*ref.Namespace)
+		}
+		secret, err := t.secretLister.Secrets(namespace).Get(string(ref.Name))
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CA bundle secret %s/%s: %w", namespace, ref.Name, err)
+		}
+		// Prefer ca.crt, fall back to tls.crt
+		caData, ok := secret.Data["ca.crt"]
+		if !ok {
+			caData, ok = secret.Data[corev1.TLSCertKey]
+			if !ok {
+				return nil, fmt.Errorf("secret %s/%s does not contain ca.crt or %s", namespace, ref.Name, corev1.TLSCertKey)
+			}
+		}
+		allPEM = append(allPEM, caData...)
+	}
+	return allPEM, nil
+}
+
+// resolveClientCertificate resolves a SecretObjectReference to a TlsCertificate for mutual TLS.
+func (t *translator) resolveClientCertificate(ref *gatewayv1.SecretObjectReference, defaultNamespace string) (*transport_socketsv3.TlsCertificate, error) {
+	namespace := defaultNamespace
+	if ref.Namespace != nil {
+		namespace = string(*ref.Namespace)
+	}
+	secret, err := t.secretLister.Secrets(namespace).Get(string(ref.Name))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get client certificate secret %s/%s: %w", namespace, ref.Name, err)
+	}
+	certData, ok := secret.Data[corev1.TLSCertKey]
+	if !ok {
+		return nil, fmt.Errorf("secret %s/%s does not contain %s", namespace, ref.Name, corev1.TLSCertKey)
+	}
+	keyData, ok := secret.Data[corev1.TLSPrivateKeyKey]
+	if !ok {
+		return nil, fmt.Errorf("secret %s/%s does not contain %s", namespace, ref.Name, corev1.TLSPrivateKeyKey)
+	}
+	return &transport_socketsv3.TlsCertificate{
+		CertificateChain: &corev3.DataSource{
+			Specifier: &corev3.DataSource_InlineBytes{InlineBytes: certData},
+		},
+		PrivateKey: &corev3.DataSource{
+			Specifier: &corev3.DataSource_InlineBytes{InlineBytes: keyData},
+		},
+	}, nil
 }
 
 // translateListenerToFilterChain creates a filter chain for an Envoy listener

@@ -1,0 +1,51 @@
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: httpbin-tls-gateway
+  namespace: default
+spec:
+  gatewayClassName: wg-ai-gateway
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8080
+    allowedRoutes:
+      namespaces:
+        from: All
+---
+apiVersion: ainetworking.prototype.x-k8s.io/v0alpha0
+kind: XBackendDestination
+metadata:
+  name: httpbin-tls-backend
+  namespace: default
+spec:
+  destination:
+    type: Fqdn
+    fqdn:
+      hostname: httpbin.org
+    ports:
+    - number: 443
+      protocol: HTTP
+      tls:
+        mode: Simple
+        insecureSkipVerify: true
+        sni: httpbin.org
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: httpbin-tls-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: httpbin-tls-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: "/get"
+    backendRefs:
+    - name: httpbin-tls-backend
+      kind: Backend
+      group: ainetworking.prototype.x-k8s.io
+      port: 443
