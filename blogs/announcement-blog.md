@@ -59,19 +59,14 @@ Key features include:
 - Compliance engineers enforcing regional restrictions on AI traffic
 - Organizations centralizing AI workloads on dedicated clusters
 
-### Rate Limiting (Place Holder)
-
-// PLACEHOLDER - ADD DETAILS AFTER RATE LIMITING INITIAL PROPOSAL IS ADDED
-
 ## Upcoming Events
 
 ### KubeCon + CloudNativeCon Europe 2026, Amsterdam
-We're thrilled that members of our working group will be presenting at [KubeCon + CloudNativeCon Europe](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/) and [Agentics Day: MCP + Agents co-located event](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/co-located-events/agentics-day-mcp-agents/) in Amsterdam, where we will present and discuss the problems at the intersection of AI and networking, including the WG's active proposals, as well as the intersection of AI gateways with Model Context Protocol and agent networking patterns.
-This event will showcase how our proposals enable the infrastructure needed for next-generation AI deployments and multi-agent communication patterns.
+We're thrilled that members of our working group will be presenting at [KubeCon + CloudNativeCon Europe](https://events.linuxfoundation.org/kubecon-cloudnativecon-europe/) in Amsterdam, where we will present and discuss the problems at the intersection of AI and networking, including the WG's active proposals, as well as the intersection of AI gateways with Model Context Protocol and agent networking patterns.
+This event will showcase how our proposals enable the infrastructure needed for next-generation AI deployments and communication patterns.
 We’ll share the initial designs, early prototypes, and emerging directions shaping the WG’s roadmap.
 For more details see our sessions here:
 - [AI'm at the Gate! Introducing the AI Gateway Working Group in Kubernetes](https://kccnceu2026.sched.com/event/2EF5t/aim-at-the-gate-introducing-the-ai-gateway-working-group-in-kubernetes-kellen-swain-google-morgan-foster-nir-rozenbaum-red-hat-shachar-tal-palo-alto-networks?iframe=yes&w=&sidebar=yes&bg=no)
-- @Keith, @morgan - do we have a session in Agentic Day? I haven't found one.
 
 ## Connect with us
 The AI Gateway Working Group represents the Kubernetes community's commitment to standardizing AI workload networking. As AI becomes increasingly integral to modern applications, we need robust, standardized infrastructure that can support the unique requirements of inference workloads while maintaining the security, observability, and reliability standards that Kubernetes users expect.
