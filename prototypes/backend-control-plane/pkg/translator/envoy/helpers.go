@@ -154,7 +154,7 @@ func (t *translator) buildUpstreamTLSContext(tlsConfig *v0alpha0.BackendTLS, hos
 	// Set ALPN based on backend protocol
 	switch protocol {
 	case v0alpha0.BackendProtocolHTTP2:
-		commonTLS.AlpnProtocols = []string{"h2", "http/1.1"}
+		commonTLS.AlpnProtocols = []string{"h2"}
 	case v0alpha0.BackendProtocolHTTP:
 		commonTLS.AlpnProtocols = []string{"http/1.1"}
 	}
