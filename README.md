@@ -35,11 +35,14 @@ supporters for your proposal in the community who can help move it forward with 
 
 ### Prototypes
 
-You can create prototypes for any of our proposals, however to avoid confusion
-keep these in a separate branch and don't merge to `main`. This allows us to
-collaborate and share, without creating any confusion of there being code in
-`main` and that somehow being construed as something that should be used in other
-projects.
+You are welcome to create and share prototypes for any WG proposal under the [prototypes directory](/prototypes)
+in `main` branch. This enables collaboration, experimentation, and knowledge sharing across contributors.
+
+However, this Working Group (WG) does not own or maintain production code. All code in this repository is provided strictly for PoC, experimentation, and discussion purposes only. It should not be considered production-ready, officially supported, or suitable for direct reuse in other projects.
+
+More details can be found in the [prototypes directory](/prototypes).
+
+Long term, proposals and any mature implementations originating from this WG are expected to move into appropriate Kubernetes subprojects or other relevant upstream repositories, where formal ownership and maintenance can be established.
 
 ## Community, discussions, contributions, and support
 
