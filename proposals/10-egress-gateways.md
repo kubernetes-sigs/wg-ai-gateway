@@ -95,7 +95,6 @@ ingress use case.
 This proposal focuses on a reverse-proxy egress model, where destinations are explicitly configured. It aims to define:
 
 1. Resource model using Gateway + HTTPRoute with an additional resource (e.g. `Backend`) for destinations (Service or FQDN).
-    - Other resource models (e.g., Mesh-attached egress via sidecars) are possible and are explicitly left open for future exploration.
 2. Two routing modes: Endpoint (direct) and Parent (gateway chaining).
 3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
 4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
@@ -130,12 +129,7 @@ Forward-proxy egress (dynamic routing to arbitrary external hostnames), network-
 **Cons**
 - Implies defining equivalents of parentRefs, listeners, and route attachment.
 
-**Alternative Considered: Egress Definition Resource**
-- Use a new resource to define which requests should be considered egress traffic, in order to express egress policies independently of the egress gateway. This follows the model used by some service meshes (for example, [Linkerd’s EgressNetwork resource](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)).
-- Allows egress to be expressed at the data-plane level without the need for a Gateway instance.
-
-
-This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude Mesh-based egress models in future work.
+This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude mesh-based egress models in future work.
 
 ### Backend Resource and Policy Application
 
