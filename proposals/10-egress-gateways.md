@@ -211,7 +211,7 @@ The example above inlines TLS configuration directly on the `Backend` resource. 
 
 Inline TLS on `Backend` sidesteps all of these. The consumer defines TLS where they define the destination: no cross-namespace policy attachment, no colocation ambiguity, no Service-only constraint.
 
-For `KubernetesService` backends, the producer exists within the cluster and can set `BackendTLSPolicy` as designed. For FQDN backends, no in-cluster producer exists, making consumer-side inline TLS the only viable option. We should align `BackendTLSPolicy` and `Backend.spec.tls` in type shape to minimize user confusion, and in the short term, users who don’t need mTLS should prefer `BackendTLSPolicy` for Kubernetes Services.
+For `Service` backends, the producer exists within the cluster and can set `BackendTLSPolicy` as designed. For FQDN backends, no in-cluster producer exists, making consumer-side inline TLS the only viable option. We should align `BackendTLSPolicy` and `Backend.spec.tls` in type shape to minimize user confusion, and in the short term, users who don’t need mTLS should prefer `BackendTLSPolicy` for Kubernetes Services.
 
 #### Backend Extensions
 
