@@ -178,10 +178,15 @@ There is, however, an open question about what the appropriate role for `Backend
 
 One consequence of this approach is that `Backend` is not a suitable target for any producer-side policies (e.g. authorization or authentication). This is difficult to enforce at the API level ([GEP-713](https://gateway-api.sigs.k8s.io/geps/gep-713/) for policy attachment does not specify categories distinguishing producer vs consumer), so implementations MUST consider `Backend` only as a consumer when attaching policies to it. Note that this does not preclude the possibility of defining egress authorization policies (e.g. consumer X can only talk to services A and B) if (and only if!) the implementation can guarantee enforcement. Most implementations should likely be setting producer-side authorization/authentication policy at the egress gateway instead.
 
-
 #### Inline TLS Policy
 
 The example above inlines TLS configuration directly on the `Backend` resource. `Backend` is a consumer resource, and consumer-side TLS semantics are fundamentally different from producer-side. Producer-oriented semantics imply a single TLS policy per destination. Consumer-oriented semantics must support diverse policies toward the same destination. A `Backend` in namespace A may connect to the same FQDN as one in namespace B with different certificates and validation requirements.
+
+##### Fragmentation acknowledgment
+
+TLS configuration in Gateway API is already spread across four distinct surfaces: listener TLS, gateway-wide mTLS, TLSRoute, and BackendTLSPolicy. Each scoped to a different persona and connection segment (see [GEP-2907](https://gateway-api.sigs.k8s.io/geps/gep-2907/) for the full taxonomy). `Backend.spec.tls` adds a fifth, which carries a real cost.
+
+The justification is that no existing surface covers consumer-side TLS toward external FQDNs: `Service` type `ExternalName` is the closest analogue, but naive usage breaks SNI and Host/:authority header alignment because the HTTP headers point to the cluster-internal FQDN rather than the external hostname. `BackendTLSPolicy` can set SNI but doesn't fix the Host header, and still requires a synthetic Service to target.
 
 ##### Why not extend BackendTLSPolicy?
 
