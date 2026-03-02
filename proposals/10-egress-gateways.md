@@ -110,21 +110,9 @@ A `Backend` represents an external destination. Today, egress is typically achie
 
 A `Service` does not need to know about a `Gateway`, and likewise this proposal does not attach `Backend` to a particular `Gateway`. A single `Backend` may be referenced by multiple `HTTPRoute` objects and consumed by multiple Gateways. In contrast, `HTTPRoute` does attach to specific Gateways via `parentRef`, since it represents configuration that is scoped to a particular Gateway.
 
-### Forward-Proxy Egress Model (Future Work)
+### Out of Scope
 
-Another egress pattern is a dynamic forward-proxy model, where the egress gateway accepts requests to arbitrary external hostnames rather than routing only to a fixed set of Backends.
-
-This document does not define a forward-proxy API. We may explore a complementary forward-proxy design in a follow-up proposal or subsection.
-
-### Network Egress Model (Needs Discussion)
-
-Some precedent exists throughout the community for egress which is supported at a network level.
-
-Prime examples include Linkerd (which supports BOTH `Gateway`, and network level (effectively `Mesh` level),
-and OVN-Kubernetes (`EgressRoute`).
-
-TODO: We need to analyze this use case and decide if it needs coverage from this proposal as well,
-and if not, document it as an alternative considered.
+Forward-proxy egress (dynamic routing to arbitrary external hostnames), network-level egress (L3/L4 CIDR-based routing), and mesh-attached egress (sidecar-enforced policy without a Gateway) are not covered by this proposal. Each may be explored in a follow-up GEP.
 ## Open Design Questions
 
 ### Gateway Resource
@@ -529,11 +517,8 @@ For inference and agentic workloads, the solution must support:
 - Denials and transform failures MUST emit Events.
 
 ## Service Mesh Considerations
-- Often no Gateway resource centralizing the application of the policy or configuration
-- Meshes may often trade off stronger namespace-oriented tenenacy in favor of ease-of-configuration
-- `Backend` MAY be used as a routing target within a mesh (without a Gateway), but such usage is considered implementation-specific at this time and may be broken later.
-    - If implemented this way, it is strongly encouraged that the `Backend`'s configuration only applies to clients in the same namespace as the `Backend` resource to avoid cross-namespace policy conflicts.
-    - Mesh implementations should consider proposing a cluster-wide `Backend` resource OR a `backendSelector` capability on a future `Frontend` resource to ease cross-namespace, cluster-wide usage.
+
+Mesh-attached egress (where policy is enforced at the sidecar or waypoint proxy without a centralized Gateway) is out of scope for this proposal. A follow-up GEP may define how `Backend` interacts with mesh-based egress models.
 
 ## What about BackendTrafficPolicy?
 
@@ -672,26 +657,4 @@ Linkerd’s approach attaches Gateway API routes to a first-class object that cl
 
 ## Network-Level Approaches
 
-Cilium and OVN-Kubernetes offer egress routing policy at the L3/L4 level, focused on source identity and network-level filtering rather than application protocol semantics.
-
-### Cilium
-
-> The egress gateway feature routes all IPv4 and IPv6 connections originating from pods and destined to specific cluster-external CIDRs through particular nodes, from now on called "gateway nodes".
-
-[source](https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/#egress-gateway)
-
-Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is cluster scoped. It serves to select pods and matching destination CIDRs and then ensures that egress traffic matching those criteria is routed through specific nodes with specific source IPs.
-
-### OVN-Kubernetes
-
-`EgressIP` ensures that traffic from configured pods or namespaces presents a consistent source IP to external services.
-`EgressFirewall` supports namespace-scoped Allow/Deny policies for traffic from pods to IPs outside the cluster.
-`EgressService` has a one-to-one mapping with a `LoadBalancer` Service:
-
-> [EgressService] enables the egress traffic of pods backing a LoadBalancer service to use a different network than the main one and/or their source IP to be the Service's ingress IP.
-
-[source](https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/)
-
-### Key Takeaway
-
-These approaches are complementary to our use case. This proposal focuses on application-layer (L7) policy enforcement and routing semantics, e.g., [payload processing](7-payload-processing.md), which operates above the network level.
+Network-level egress (Cilium `CiliumEgressGatewayPolicy`, OVN-Kubernetes `EgressIP`/`EgressFirewall`/`EgressService`) operates at L3/L4 and is complementary to this proposal's focus on application-layer (L7) policy and routing. These approaches are out of scope and may be explored in a follow-up GEP.
