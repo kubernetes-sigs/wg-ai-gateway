@@ -95,7 +95,6 @@ ingress use case.
 This proposal focuses on a reverse-proxy egress model, where destinations are explicitly configured. It aims to define:
 
 1. Resource model using Gateway + HTTPRoute with an additional resource (e.g. `Backend`) for destinations (Service or FQDN).
-    - Other resource models (e.g., Mesh-attached egress via sidecars) are possible and are explicitly left open for future exploration.
 2. Two routing modes: Endpoint (direct) and Parent (gateway chaining).
 3. Policy scoping: Gateway (global posture), Route (filters, per-request), Backend (per-destination).
 4. Extension points for AI use cases (payload processing, guardrails), without assuming an AI-only design.
@@ -110,21 +109,10 @@ A `Backend` represents an external destination. Today, egress is typically achie
 
 A `Service` does not need to know about a `Gateway`, and likewise this proposal does not attach `Backend` to a particular `Gateway`. A single `Backend` may be referenced by multiple `HTTPRoute` objects and consumed by multiple Gateways. In contrast, `HTTPRoute` does attach to specific Gateways via `parentRef`, since it represents configuration that is scoped to a particular Gateway.
 
-### Forward-Proxy Egress Model (Future Work)
+### Out of Scope
 
-Another egress pattern is a dynamic forward-proxy model, where the egress gateway accepts requests to arbitrary external hostnames rather than routing only to a fixed set of Backends.
+Forward-proxy egress (dynamic routing to arbitrary external hostnames), network-level egress (L3/L4 CIDR-based routing), and mesh-attached egress (sidecar-enforced policy without a Gateway) are not covered by this proposal. Each may be explored in a follow-up GEP.
 
-This document does not define a forward-proxy API. We may explore a complementary forward-proxy design in a follow-up proposal or subsection.
-
-### Network Egress Model (Needs Discussion)
-
-Some precedent exists throughout the community for egress which is supported at a network level.
-
-Prime examples include Linkerd (which supports BOTH `Gateway`, and network level (effectively `Mesh` level),
-and OVN-Kubernetes (`EgressRoute`).
-
-TODO: We need to analyze this use case and decide if it needs coverage from this proposal as well,
-and if not, document it as an alternative considered.
 ## Open Design Questions
 
 ### Gateway Resource
@@ -142,12 +130,7 @@ and if not, document it as an alternative considered.
 **Cons**
 - Implies defining equivalents of parentRefs, listeners, and route attachment.
 
-**Alternative Considered: Egress Definition Resource**
-- Use a new resource to define which requests should be considered egress traffic, in order to express egress policies independently of the egress gateway. This follows the model used by some service meshes (for example, [Linkerd’s EgressNetwork resource](https://linkerd.io/2-edge/reference/egress-network/#egressnetwork-semantics)).
-- Allows egress to be expressed at the data-plane level without the need for a Gateway instance.
-
-
-This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude Mesh-based egress models in future work.
+This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude mesh-based egress models in future work.
 
 ### Backend Resource and Policy Application
 
@@ -193,7 +176,7 @@ In the context of egress routing, the `Backend` resource always represents the *
 
 There is, however, an open question about what the appropriate role for `Backend`s of type `KubernetesService`. If a `Backend` points to a Service within the same cluster, is it still a consumer resource (describing how the gateway should connect to that Service), or is it a producer resource (describing how the Service expects clients to connect to it)? This question is important because it influences how we think about policy application and ownership semantics for `Backend`s. I propose that we treat all `Backend`s as consumer resources for the sake of consistency and simplicity. This means that even if a `Backend` points to a `Service` within its same namespace, it still describes how the gateway should connect to that Service from a client perspective. This approach has the added benefit of allowing different namespaces to define their own `Backend` resources for the same Service, each with potentially different connection policies (e.g. TLS settings, extensions) without ReferenceGrant. This aligns with the idea that different consumers may have different requirements for how they connect to the same service.
 
-One consequence of this approach is that `Backend` is not a suitable target for any producer-side policies (e.g. authorization or authentication). This is difficult to enforce at the API level ([GEP-713](https://gateway-api.sigs.k8s.io/geps/gep-713/) for policy attachment does not specify categories distinguishing producer vs consumer), so implementations MUST consider `Backend` only as a consumer when attaching policies to it. Note that this does not preclude the possibility of defining egress authorization policies (e.g. consumer X can only talk to servics A and B) if (and only if!) the implementation can guarantee enforcement. Most implementations should likely be setting producer-side authorization/authentication policy at the egress gateway instead.
+One consequence of this approach is that `Backend` is not a suitable target for any producer-side policies (e.g. authorization or authentication). This is difficult to enforce at the API level ([GEP-713](https://gateway-api.sigs.k8s.io/geps/gep-713/) for policy attachment does not specify categories distinguishing producer vs consumer), so implementations MUST consider `Backend` only as a consumer when attaching policies to it. Note that this does not preclude the possibility of defining egress authorization policies (e.g. consumer X can only talk to services A and B) if (and only if!) the implementation can guarantee enforcement. Most implementations should likely be setting producer-side authorization/authentication policy at the egress gateway instead.
 
 
 #### TLS Policy
@@ -236,19 +219,7 @@ Things get murkier for `Backend`s of type `KubernetesService`. Despite the reaso
 
 #### Backend Extensions
 
-Backends MAY reference extension processors via `spec.extensions[]`. This proposal does **not** define processor semantics, catalogs, schema validation, or execution ordering. The details of those topics are covered in the separate  **[Payload Processing proposal](../7-payload-processing.md)** and will be refined independently of the egress routing model. However, it is worth discussing the semantics of these egress extensions at a high level.
-
-Fundamentally, there are 3 options for where extension processors can be applied in the egress flow:
-
-1. **Route-level**: Extensions are applied as filters on the `HTTPRoute`, affecting individual requests as they are routed to a `Backend`.
-2. **Backend-level**: Extensions are applied at the `Backend`, affecting all requests sent to that destination. Note that because multiple `Backend`s can point to the same destination (e.g. FQDN or `Service`), users may encounter unexpected behavior if different `Backend`s define conflicting extensions for the same destination (on different routes for example).
-3. **Policy attachment**: Extensions are applied as policies attached to the `Backend` resource.
-
-The key difference between both options 1 and 2 vs. option 3 really boils down to an even higher-level question of filters vs. policies in Gateway API. We won't attempt to define a broad rule in this proposal, but we will align with the outcome of that discussion.
-
-Digging more deeply into option 1 vs. option 2, there are, of course, tradeoffs to consider. Route-level extensions provide more granular control, allowing different routes to apply different processors to the same `Backend`. This is useful when different consumers have different requirements for how they interact with the same destination. However, it may lead to duplication (if multiple routes need to apply the same processor to the same `Backend`) or accidental misconfigurations (if users forget to apply a necessary processor on a route). Backend-level extensions provide a centralized way to manage processors for a given `Backend` resource. This is useful when there are common requirements for how all consumers should interact with a destination. However, it may limit flexibility if different routes need different processors for the same `Backend`. To navigate these tradeoffs, I believe we must answer one fundamental question: how would we distinguish between extensions available on the `HTTPRoute` vs those available on the `Backend`? Would they be the same set of extensions, or would some extensions only make sense at one level or the other? For example, would a payload transformer (e.g. PII redaction) make sense at the `Backend` level, or is that inherently a per-request concern that belongs on the `HTTPRoute`? Conversely, would a rate limiter make sense at the `HTTPRoute` level, or is that inherently a per-destination concern that belongs on the `Backend`?
-
-If we deicde that they are the same set of extensions (just applied with different granularity), then we must decide whether both levels are necessary. If, on the other hand, we want to separate some extensions to be `Backend`-only, then we must define clear distinctions between not just route vs. backend extensions, but also whether or not there is a need for a third type: frontend extensions (especially in the mesh case where there may not be a `Gateway` or explicit route).
+Backends MAY reference extension processors via `spec.extensions[]`. This proposal does **not** define processor semantics, catalogs, schema validation, or execution ordering. The details of those topics are covered in the separate **[Payload Processing proposal](../7-payload-processing.md)** and will be refined independently of the egress routing model.
 
 __(Note: All examples of extensions in this document are illustrative only)__
 
@@ -263,7 +234,7 @@ While the namespaced ownership semantics of Kubernetes `Service`s are well-defin
 Realistically, both models have merit and are widely used across many gateway/mesh implementations. Prior art from the Network Policy subproject (i.e. `AdminNetworkPolicy` vs `NetworkPolicy`) suggests that both cluster-scoped and namespaced resources can coexist to serve different personas and use cases. We should consider whether:
 
 1. Whether `Backend` should be namespaced or cluster-scoped.
-2. Whether we should define both namespaced and cluster-scoped variants of `Backend` (e.g. `GlobalBackend` or `ClusterWideBakcend`)to serve different personas (service owners vs platform operators).
+2. Whether we should define both namespaced and cluster-scoped variants of `Backend` (e.g. `GlobalBackend` or `ClusterWideBackend`)to serve different personas (service owners vs platform operators).
 
 After multiple discussions, I am currently proposing making `Backend` a namespaced resource. This aligns with the idea of `Backend` being a consumer resource, where each namespace can define its own backends independently. One of the realizations that led me to this conclusion is that many of the admin use-cases for having a cluster-scoped `Backend` for external FQDNs can be reframed as making the cluster-admin the "service owner" of a (hypothetical) cluster-wide `Frontend` concept/resource. In other words, the cluser-admin would potentially be able to define a `Frontend` that represents a specific external service (e.g. *.openai.com) and configure TLS and other policies (authentication and authorization) that ensure clients are connecting to that `Frontend` in the way they expect (e.g. using certain certificates, with a proper SNI being set, etc). This `Frontend` could even have an optional `parentRef` to an egress gateway that, when combined with a `NetworkPolicy` enforces that all traffic to that or any `Frontend` must go through the egress gateway. While this entire flow is hypothetical and not in scope for this proposal, it does illustrate that cluster-scoped `Backend`s may not be strictly necessary to achieve the admin use-cases we are trying to solve for.
 
@@ -529,11 +500,8 @@ For inference and agentic workloads, the solution must support:
 - Denials and transform failures MUST emit Events.
 
 ## Service Mesh Considerations
-- Often no Gateway resource centralizing the application of the policy or configuration
-- Meshes may often trade off stronger namespace-oriented tenenacy in favor of ease-of-configuration
-- `Backend` MAY be used as a routing target within a mesh (without a Gateway), but such usage is considered implementation-specific at this time and may be broken later.
-    - If implemented this way, it is strongly encouraged that the `Backend`'s configuration only applies to clients in the same namespace as the `Backend` resource to avoid cross-namespace policy conflicts.
-    - Mesh implementations should consider proposing a cluster-wide `Backend` resource OR a `backendSelector` capability on a future `Frontend` resource to ease cross-namespace, cluster-wide usage.
+
+Mesh-attached egress (where policy is enforced at the sidecar or waypoint proxy without a centralized Gateway) is out of scope for this proposal. A follow-up GEP may define how `Backend` interacts with mesh-based egress models.
 
 ## What about BackendTrafficPolicy?
 
@@ -672,26 +640,4 @@ Linkerd’s approach attaches Gateway API routes to a first-class object that cl
 
 ## Network-Level Approaches
 
-Cilium and OVN-Kubernetes offer egress routing policy at the L3/L4 level, focused on source identity and network-level filtering rather than application protocol semantics.
-
-### Cilium
-
-> The egress gateway feature routes all IPv4 and IPv6 connections originating from pods and destined to specific cluster-external CIDRs through particular nodes, from now on called "gateway nodes".
-
-[source](https://docs.cilium.io/en/stable/network/egress-gateway/egress-gateway/#egress-gateway)
-
-Policy is applied via the `CiliumEgressGatewayPolicy` resource. This resource is cluster scoped. It serves to select pods and matching destination CIDRs and then ensures that egress traffic matching those criteria is routed through specific nodes with specific source IPs.
-
-### OVN-Kubernetes
-
-`EgressIP` ensures that traffic from configured pods or namespaces presents a consistent source IP to external services.
-`EgressFirewall` supports namespace-scoped Allow/Deny policies for traffic from pods to IPs outside the cluster.
-`EgressService` has a one-to-one mapping with a `LoadBalancer` Service:
-
-> [EgressService] enables the egress traffic of pods backing a LoadBalancer service to use a different network than the main one and/or their source IP to be the Service's ingress IP.
-
-[source](https://ovn-kubernetes.io/features/cluster-egress-controls/egress-service/)
-
-### Key Takeaway
-
-These approaches are complementary to our use case. This proposal focuses on application-layer (L7) policy enforcement and routing semantics, e.g., [payload processing](7-payload-processing.md), which operates above the network level.
+Network-level egress (Cilium `CiliumEgressGatewayPolicy`, OVN-Kubernetes `EgressIP`/`EgressFirewall`/`EgressService`) operates at L3/L4 and is complementary to this proposal's focus on application-layer (L7) policy and routing. These approaches are out of scope and may be explored in a follow-up GEP.
