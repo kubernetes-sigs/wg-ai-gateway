@@ -5,5 +5,8 @@ approvers:
   - kflynn
   - kfswain
   - nirrozenbaum
+  - usize
+
+emeritus-approves:
   - shaneutt
   - xunzhuo
