@@ -323,7 +323,7 @@ func (in *EgressListener) DeepCopyInto(out *EgressListener) {
 	*out = *in
 	if in.TLS != nil {
 		in, out := &in.TLS, &out.TLS
-		*out = new(v1.GatewayTLSConfig)
+		*out = new(v1.ListenerTLSConfig)
 		(*in).DeepCopyInto(*out)
 	}
 	if in.AllowedRoutes != nil {
