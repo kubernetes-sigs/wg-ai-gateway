@@ -3,11 +3,13 @@ kind: ConfigMap
 metadata:
   name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
+  {{- if .GatewayUID }}
   ownerReferences:
   - apiVersion: gateway.networking.k8s.io/v1
     kind: Gateway
     name: {{ .GatewayName }}
     uid: {{ .GatewayUID }}
+  {{- end }}
 data:
   {{.EnvoyBootstrapCfgFileName}}: |
 {{ .Bootstrap | indent 4 }}
@@ -17,22 +19,26 @@ kind: ServiceAccount
 metadata:
   name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
+  {{- if .GatewayUID }}
   ownerReferences:
   - apiVersion: gateway.networking.k8s.io/v1
     kind: Gateway
     name: {{ .GatewayName }}
     uid: {{ .GatewayUID }}
+  {{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
+  {{- if .GatewayUID }}
   ownerReferences:
   - apiVersion: gateway.networking.k8s.io/v1
     kind: Gateway
     name: {{ .GatewayName }}
     uid: {{ .GatewayUID }}
+  {{- end }}
 spec:
   replicas: 1
   selector:
@@ -72,11 +78,13 @@ kind: Service
 metadata:
   name: {{ .ResourceName }}
   namespace: {{ .Namespace }}
+  {{- if .GatewayUID }}
   ownerReferences:
   - apiVersion: gateway.networking.k8s.io/v1
     kind: Gateway
     name: {{ .GatewayName }}
     uid: {{ .GatewayUID }}
+  {{- end }}
 spec:
   type: LoadBalancer
   selector:

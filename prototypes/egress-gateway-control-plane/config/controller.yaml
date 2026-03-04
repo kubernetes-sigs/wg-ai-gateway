@@ -36,10 +36,10 @@ rules:
   resources: ["endpointslices"]
   verbs: ["get", "list", "watch"]
 - apiGroups: ["gateway.networking.k8s.io"]
-  resources: ["httproutes"]
+  resources: ["gateways", "httproutes"]
   verbs: ["get", "list", "watch", "update", "patch"]
 - apiGroups: ["gateway.networking.k8s.io"]
-  resources: ["httproutes/status"]
+  resources: ["gateways/status", "httproutes/status"]
   verbs: ["get", "update", "patch"]
 - apiGroups: ["ainetworking.prototype.x-k8s.io"]
   resources: ["egressgateways", "xbackenddestinations"]
@@ -130,7 +130,7 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: ai-egress-gateway-controller
+  name: ai-gateway-controller
   namespace: ai-gateway-system
   labels:
     app.kubernetes.io/name: ai-egress-gateway-controller
@@ -154,4 +154,4 @@ metadata:
     app.kubernetes.io/component: gatewayclass
 spec:
   controllerName: sigs.k8s.io/wg-ai-egress-gateway-envoy-controller
-  description: "AI Gateway egress implementation using a dedicated EgressGateway resource"
+  description: "AI Gateway egress using EgressGateway resource"
