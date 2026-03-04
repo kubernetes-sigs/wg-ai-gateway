@@ -298,9 +298,15 @@ func (c *controller) syncHandler(ctx context.Context, key string) error {
 
 // egressGatewayToGateway converts an EgressGateway to a standard Gateway for
 // reuse with the existing translator and deployer packages.
+// Note: the UID is intentionally not copied so that the deployer does not set
+// ownerReferences pointing to a non-existent Gateway resource, which would
+// cause the Kubernetes garbage collector to delete the managed resources.
 func egressGatewayToGateway(eg *v0alpha0.EgressGateway) *gatewayv1.Gateway {
 	gw := &gatewayv1.Gateway{
-		ObjectMeta: eg.ObjectMeta,
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      eg.Name,
+			Namespace: eg.Namespace,
+		},
 		Spec: gatewayv1.GatewaySpec{
 			GatewayClassName: eg.Spec.GatewayClassName,
 			Listeners:        make([]gatewayv1.Listener, len(eg.Spec.Listeners)),
