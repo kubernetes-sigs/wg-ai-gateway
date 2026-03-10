@@ -309,6 +309,7 @@ func egressGatewayToGateway(eg *v0alpha0.EgressGateway) *gatewayv1.Gateway {
 		},
 		Spec: gatewayv1.GatewaySpec{
 			GatewayClassName: eg.Spec.GatewayClassName,
+			Addresses:        eg.Spec.Addresses,
 			Listeners:        make([]gatewayv1.Listener, len(eg.Spec.Listeners)),
 			Infrastructure:   eg.Spec.Infrastructure,
 		},
@@ -329,6 +330,17 @@ func egressGatewayToGateway(eg *v0alpha0.EgressGateway) *gatewayv1.Gateway {
 // updateEgressGatewayStatus updates the EgressGateway status with conditions.
 func (c *controller) updateEgressGatewayStatus(ctx context.Context, eg *v0alpha0.EgressGateway, status metav1.ConditionStatus, reason, message string) error {
 	egCopy := eg.DeepCopy()
+
+	// Echo declared spec addresses into status, confirming they've been recorded.
+	if len(eg.Spec.Addresses) > 0 {
+		egCopy.Status.Addresses = make([]gatewayv1.GatewayStatusAddress, len(eg.Spec.Addresses))
+		for i, addr := range eg.Spec.Addresses {
+			egCopy.Status.Addresses[i] = gatewayv1.GatewayStatusAddress{
+				Type:  addr.Type,
+				Value: addr.Value,
+			}
+		}
+	}
 
 	apimeta.SetStatusCondition(&egCopy.Status.Conditions, metav1.Condition{
 		Type:               string(gatewayv1.GatewayConditionAccepted),
