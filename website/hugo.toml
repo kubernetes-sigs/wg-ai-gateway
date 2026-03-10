@@ -1,0 +1,86 @@
+baseURL = 'https://ai-gateway.sigs.k8s.io/'
+languageCode = 'en-us'
+title = 'AI Gateway Working Group'
+theme = 'docsy'
+enableGitInfo = true
+
+[languages]
+  [languages.en]
+    title = 'AI Gateway Working Group'
+    languageName = 'English'
+    weight = 1
+    
+    # Main navigation menu
+    [languages.en.menus]
+      [[languages.en.menus.main]]
+        name = 'Documentation'
+        url = '/docs/'
+        weight = 10
+      [[languages.en.menus.main]]
+        name = 'Proposals'
+        url = '/proposals/'
+        weight = 20
+      [[languages.en.menus.main]]
+        name = 'GitHub'
+        url = 'https://github.com/kubernetes-sigs/wg-ai-gateway'
+        weight = 40
+
+[params]
+  description = 'Kubernetes AI Gateway Working Group - Proposals and prototypes for AI Gateway capabilities in Kubernetes'
+  privacy_policy = 'https://policies.google.com/privacy'
+  title = 'AI Gateway WG'
+  github_repo = 'https://github.com/kubernetes-sigs/wg-ai-gateway'
+  github_project_repo = 'https://github.com/kubernetes-sigs/wg-ai-gateway'
+  github_branch = 'main'
+  github_subdir = 'website/content'
+  offlineSearch = false
+  
+  # Copyright configuration
+  copyright = 'The Kubernetes Authors | Documentation Distributed under CC BY 4.0'
+
+  # Hero section background image
+  [params.ui]
+    navbar_logo = true
+    sidebar_menu_compact = true
+    sidebar_menu_foldable = true
+    breadcrumb_disable = false
+    footer_about_enable = true
+    
+    [params.ui.footer_about]
+      title = 'AI Gateway Working Group'
+      text = 'Proposals and prototypes for AI Gateway capabilities in Kubernetes'
+      copyright = 'The Kubernetes Authors'
+      license = '<a rel="license" href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>'
+      trademark = '© The Linux Foundation has registered trademarks and uses trademarks. For a list of trademarks of The Linux Foundation, please see our <a href="https://www.linuxfoundation.org/trademark-usage/" target="_blank" rel="noopener">Trademark Usage page</a>.'
+    
+    [params.ui.links]
+      [[params.ui.links.user]]
+        name = 'GitHub'
+        url = 'https://github.com/kubernetes-sigs/wg-ai-gateway'
+        icon = 'fab fa-github'
+        desc = 'Development discussions and contributions on GitHub'
+      [[params.ui.links.user]]
+        name = 'Slack'
+        url = 'https://kubernetes.slack.com/messages/wg-ai-gateway'
+        icon = 'fab fa-slack'
+        desc = 'Chat with other project developers'
+      [[params.ui.links.developer]]
+        name = 'Mailing List'
+        url = 'https://groups.google.com/a/kubernetes.io/g/wg-ai-gateway'
+        icon = 'fas fa-envelope'
+        desc = 'Join our mailing list'
+      [[params.ui.links.developer]]
+        name = 'Meeting Notes'
+        url = 'https://docs.google.com/document/d/1nRRkRK2e82mxkT8zdLoAtuhkom2X6dEhtYOJ9UtfZKs'
+        icon = 'fas fa-calendar'
+        desc = 'Weekly meeting notes every Thursday 2PM EST'
+
+[markup.goldmark.renderer]
+  unsafe = true
+
+[markup.highlight]
+  codeFences = true
+  guessSyntax = true
+  lineNos = true
+  lineNumbersInTable = false
+  noClasses = false
