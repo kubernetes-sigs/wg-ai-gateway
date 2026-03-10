@@ -178,44 +178,29 @@ There is, however, an open question about what the appropriate role for `Backend
 
 One consequence of this approach is that `Backend` is not a suitable target for any producer-side policies (e.g. authorization or authentication). This is difficult to enforce at the API level ([GEP-713](https://gateway-api.sigs.k8s.io/geps/gep-713/) for policy attachment does not specify categories distinguishing producer vs consumer), so implementations MUST consider `Backend` only as a consumer when attaching policies to it. Note that this does not preclude the possibility of defining egress authorization policies (e.g. consumer X can only talk to services A and B) if (and only if!) the implementation can guarantee enforcement. Most implementations should likely be setting producer-side authorization/authentication policy at the egress gateway instead.
 
+#### Inline TLS Policy
 
-#### TLS Policy
+The example above inlines TLS configuration directly on the `Backend` resource. `Backend` is a consumer resource, and consumer-side TLS semantics are fundamentally different from producer-side. Producer-oriented semantics imply a single TLS policy per destination. Consumer-oriented semantics must support diverse policies toward the same destination. A `Backend` in namespace A may connect to the same FQDN as one in namespace B with different certificates and validation requirements.
 
-The example above inlines a basic TLS configuration directly on the `Backend` resource. This is intentional.
-Gateway API’s existing `BackendTLSPolicy` is designed around Service-based backends only and may end up being too restrictive for our needs. More specifically, using it for egress today would require representing each external FQDN as a synthetic Service, which this proposal aims to avoid. Furthermore, one could argue that inlined TLS policy provides simpler UX, especially in egress use-cases. `BackendTLSPolicy` also doesn't allow setting client certificates per backend; only once at `Gateway.spec.tls.backend`. This is overly restrictive for external FQDNs; no one "owns" a particular FQDN and can speak authoritatively about how every service in the cluster should talk to it. Generally speaking, the TLS field within `Backend` is meant to describe the TLS configuration that a client should use when talking to a backend. As the `Backend` resource shape stabilizes, we SHOULD evaluate whether `BackendTLSPolicy` can be reused, extended, or aligned for external FQDN egress use cases.
+##### Fragmentation acknowledgment
 
-##### A note on the evolution of TLS within Gateway API
+TLS configuration in Gateway API is already spread across four distinct surfaces: listener TLS, gateway-wide mTLS, TLSRoute, and BackendTLSPolicy. Each scoped to a different persona and connection segment (see [GEP-2907](https://gateway-api.sigs.k8s.io/geps/gep-2907/) for the full taxonomy). `Backend.spec.tls` adds a fifth, which carries a real cost.
 
-Today, the TLS story in Gateway API is [fractured](https://gateway-api.sigs.k8s.io/guides/tls/):
-- `Gateway.spec.listeners[].tls` defines general TLS settings for incoming connections (Standard)
-  - Defines how to handle all TLS traffic to that listener(e.g. terminate it, pass it through)
-- `Gateway.spec.tls` defines mTLS settings for the entire Gateway (Experimental)
-  - the `backend` field describes how the Gateway should connect to backends
-    - Specifically, it allows setting client certificates for mutual TLS
-  - the `frontend` field allows defining the validation context that should be used for incoming connections
-    - Used to validate the client certificate in mTLS scenarios
-- `TLSRoute` allows users to specify how TLS should be handled on a per-route basis (Experimental)
-  - Most useful for SNI-based routing in passthrough scenarios
-- `BackendTLSPolicy` allows users to define TLS settings when connecting to backends (Standard)
-  - Specifically, validation context for the server certificates presented by upstream backends.
-  - Allows setting SNI for backend connections.
-  - Allows defining SANs.
+The justification is that no existing surface covers consumer-side TLS toward external FQDNs: `Service` type `ExternalName` is the closest analogue, but naive usage breaks SNI and Host/:authority header alignment because the HTTP headers point to the cluster-internal FQDN rather than the external hostname. `BackendTLSPolicy` can set SNI but doesn't fix the Host header, and still requires a synthetic Service to target.
 
-Note: more discussion on many of these fields can be found in [GEP 2907](https://gateway-api.sigs.k8s.io/geps/gep-2907/)
+##### Why not extend BackendTLSPolicy?
 
-The proposed `Backend` resource introduces yet another place to define TLS settings, and there is certainly a cost to further fragmenting the TLS story. At minimum, I believe an additional configuration point is needed for the egress gateway story simply because there is no standard egress story in Kubernetes. `Service` type `ExternalName` is the closest analogue, however, many organizations shy away from it completely due to cross-namespace security risks. Furthermore, naive usage of `ExternalName` can easily break SNI and TLS because the HTTP Host/:authority header will point to the cluster-internal FQDN rather than the external hostname. Clients would have to manually override the Host header and SNI or (or try to use `BackendTLSPolicy` to set SNI but I think you still have the Host header problem). The `Backend` resource allows us to define a clear and unambiguous way to represent external FQDNs and how to connect to them securely.
+[BackendTLSPolicy](https://gateway-api.sigs.k8s.io/geps/gep-1897/) was designed for the producer persona targeting Services. Consumer overrides were deferred to a "near-future GEP" that has not materialized. The gaps are structural, not incidental:
 
-Things get murkier for `Backend`s of type `KubernetesService`. Despite the reasons for inline policy mentioned above, there is a strong argument for reusing `BackendTLSPolicy` here to avoid duplication and user confusion. Perhaps there should be a separate resource for `ExternalFQDN` backends that allows inline TLS, while `KubernetesService` backends reuse `BackendTLSPolicy`? Or maybe there should be another field within backend to mark a destination as being external (regardless of whether it's an FQDN or an IP)? We should certainly revisit those alternatives if we hit a wall in pursuing the current direction. In the interest of exploring this proposal fully and the cohesiveness of TLS within Gateway APi as a whole, I propoes the following guidelines for TLS policy:
+- **Ownership model unresolved**: [GEP-3155](https://gateway-api.sigs.k8s.io/geps/gep-3155/) attempted to add per-service mTLS client certificate overrides but could not resolve a path forward because the colocation semantics (Service namespace vs Gateway namespace) have non-trivial security implications that must be addressed first.
+- **Service-attachment breaks with multiple data paths**: [Issue #3554](https://github.com/kubernetes-sigs/gateway-api/issues/3554) shows that attaching TLS to a Service is problematic when the same Service is reachable through multiple paths (e.g. direct + mesh), leading to double-encryption.
+- **Non-Service targets out of conformance**: GEP-1897 only covers Service at Extended conformance. Extending `targetRef` to other kinds is Implementation-Specific. The inference extension community is working to address this as per ([issue #1556](https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/1556)).
+- **Cross-namespace consumer policy unresolved**: [GEP-2648](https://gateway-api.sigs.k8s.io/geps/gep-2648/) flags significant unresolved security concerns for policies targeting resources across namespace boundaries.
+- **Producer–consumer coupling complicates field semantics**: Extending BackendTLSPolicy to cover both roles means fields like `targetRef` and `sni` must be interpreted differently depending on whether the policy author is the service owner or the consuming gateway, creating context-dependent semantics that are difficult to document and validate.
 
-1. `Gateway.spec.listeners[].tls` remains the source of truth for incoming TLS connections to the Gateway.
-2. `Gateway.spec.tls.backend` is removed in favor of the `Backend` resource's TLS field
-    1. `Gateway.spec.tls.frontend` remains for gateway-wide mTLS validation of incoming connections.
-3. `Backend` is explicitly disallowed as a targetRef for `BackendTLSPolicy`
-4. We pursue aligning `BackendTLSPolicy` and `Backend.spec.tls` as closely as possible w.r.t types.
-    1. There may be different semantics or defaults for different types of backends (FQDN vs Service) or resources (BackendTLSPolicy), but the shape should be as similar as possible to avoid user confusion.
-    2. In the short term, if you don't need mTLS, users should prefer `BackendTLSPolicy` for Kubernetes services.
-    3. We can revisit this recommendation as `Backend` and other decompositions of `Service` evolve.
-5. `TLSRoute` retains its current role as the way to express per-route TLS handling (e.g. SNI routing in passthrough mode).
+Inline TLS on `Backend` sidesteps all of these. The consumer defines TLS where they define the destination: no cross-namespace policy attachment, no colocation ambiguity, no Service-only constraint.
+
+For `Service` backends, the producer exists within the cluster and can set `BackendTLSPolicy` as designed. For FQDN backends, no in-cluster producer exists, making consumer-side inline TLS the only viable option. We should align `BackendTLSPolicy` and `Backend.spec.tls` in type shape to minimize user confusion, and in the short term, users who don’t need mTLS should prefer `BackendTLSPolicy` for Kubernetes Services.
 
 #### Backend Extensions
 
