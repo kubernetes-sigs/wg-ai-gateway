@@ -27,9 +27,10 @@ import (
 // +kubebuilder:object:root=true
 // +kubebuilder:subresource:status
 // EgressGateway is a dedicated gateway resource for egress traffic.
-// Unlike the standard Gateway resource, EgressGateway omits ingress-oriented
-// fields such as Hostname and Addresses, providing clearer semantics and
-// RBAC boundaries for egress use cases.
+// Unlike the standard Gateway resource, EgressGateway omits the ingress-oriented
+// Hostname field on listeners, providing clearer semantics and RBAC boundaries
+// for egress use cases. Addresses are retained so that an EgressGateway can
+// represent an external proxy reachable at a known IP or hostname.
 type EgressGateway struct {
 	metav1.TypeMeta `json:",inline"`
 	// metadata is a standard object metadata.
@@ -54,12 +55,20 @@ type EgressGatewayList struct {
 }
 
 // EgressGatewaySpec defines the desired state of EgressGateway.
-// This is a subset of the Gateway API GatewaySpec, omitting ingress-oriented
-// fields like Addresses and scope.
+// This is a subset of the Gateway API GatewaySpec, omitting the ingress-oriented
+// Hostname field on listeners.
 type EgressGatewaySpec struct {
 	// gatewayClassName is the name of the GatewayClass used by this EgressGateway.
 	// +required
 	GatewayClassName gatewayv1.ObjectName `json:"gatewayClassName"`
+
+	// addresses defines the network addresses that this EgressGateway is
+	// associated with. For egress, this represents the address of an external
+	// proxy (e.g. an out-of-cluster egress proxy) so that workloads can
+	// discover where to route traffic via the EgressGateway API.
+	// +optional
+	// +kubebuilder:validation:MaxItems=16
+	Addresses []gatewayv1.GatewaySpecAddress `json:"addresses,omitempty"`
 
 	// listeners defines the set of listeners for this EgressGateway.
 	// Unlike Gateway listeners, EgressGateway listeners do not have a Hostname field
@@ -134,6 +143,12 @@ type EgressGatewayBackendTLS struct {
 
 // EgressGatewayStatus defines the observed state of EgressGateway.
 type EgressGatewayStatus struct {
+	// addresses lists the network addresses that have been bound to or
+	// associated with this EgressGateway.
+	// +optional
+	// +kubebuilder:validation:MaxItems=16
+	Addresses []gatewayv1.GatewayStatusAddress `json:"addresses,omitempty"`
+
 	// conditions describe the current conditions of the EgressGateway.
 	//
 	// +optional
