@@ -213,6 +213,7 @@ The justification is that no existing surface covers consumer-side TLS toward ex
 - **Service-attachment breaks with multiple data paths**: [Issue #3554](https://github.com/kubernetes-sigs/gateway-api/issues/3554) shows that attaching TLS to a Service is problematic when the same Service is reachable through multiple paths (e.g. direct + mesh), leading to double-encryption.
 - **Non-Service targets out of conformance**: GEP-1897 only covers Service at Extended conformance. Extending `targetRef` to other kinds is Implementation-Specific. The inference extension community is working to address this as per ([issue #1556](https://github.com/kubernetes-sigs/gateway-api-inference-extension/issues/1556)).
 - **Cross-namespace consumer policy unresolved**: [GEP-2648](https://gateway-api.sigs.k8s.io/geps/gep-2648/) flags significant unresolved security concerns for policies targeting resources across namespace boundaries.
+- **Producer–consumer coupling complicates field semantics**: Extending BackendTLSPolicy to cover both roles means fields like `targetRef` and `sni` must be interpreted differently depending on whether the policy author is the service owner or the consuming gateway, creating context-dependent semantics that are difficult to document and validate.
 
 Inline TLS on `Backend` sidesteps all of these. The consumer defines TLS where they define the destination: no cross-namespace policy attachment, no colocation ambiguity, no Service-only constraint.
 
