@@ -18,6 +18,14 @@ limitations under the License.
 
 package v0alpha0
 
+// EgressGatewayListerExpansion allows custom methods to be added to
+// EgressGatewayLister.
+type EgressGatewayListerExpansion interface{}
+
+// EgressGatewayNamespaceListerExpansion allows custom methods to be added to
+// EgressGatewayNamespaceLister.
+type EgressGatewayNamespaceListerExpansion interface{}
+
 // XBackendDestinationListerExpansion allows custom methods to be added to
 // XBackendDestinationLister.
 type XBackendDestinationListerExpansion interface{}

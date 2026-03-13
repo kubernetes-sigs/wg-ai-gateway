@@ -28,6 +28,10 @@ type FakeAinetworkingV0alpha0 struct {
 	*testing.Fake
 }
 
+func (c *FakeAinetworkingV0alpha0) EgressGateways(namespace string) v0alpha0.EgressGatewayInterface {
+	return newFakeEgressGateways(c, namespace)
+}
+
 func (c *FakeAinetworkingV0alpha0) XBackendDestinations(namespace string) v0alpha0.XBackendDestinationInterface {
 	return newFakeXBackendDestinations(c, namespace)
 }
