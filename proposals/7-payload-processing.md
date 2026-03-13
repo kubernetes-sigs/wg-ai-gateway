@@ -265,15 +265,306 @@ spec:
         tenant_id: "customer-a"
 ```
 
+## Payload Processing Protocol
+
+Payload Processors MUST implement the **Payload Processing Protocol (PPP)** — a
+gRPC-based, vendor-neutral protocol that allows the gateway to share HTTP
+request and response data with processors and receive processing decisions in
+return.
+
+### Design Principles
+
+1. **Vendor-neutral** — no proxy-specific concepts in the protocol.
+2. **Phase-based** — the gateway sends lifecycle phases; the processor responds
+   with actions.
+3. **Streaming** — one bidirectional gRPC stream per HTTP transaction. The
+   exchange is phase-by-phase: the gateway sends a phase and waits for the
+   processor's response before sending the next. By default the gateway MAY
+   forward processed data immediately, enabling streaming; processors that
+   need to correlate later phases (e.g. mutate headers based on body) can
+   signal `hold` to defer forwarding.
+4. **Minimal** — the smallest useful protocol; extensible later via new
+   fields and phases.
+5. **Composable** — processors don't need to know about each other or about
+   pipelines.
+
+### Interaction Model
+
+For each HTTP transaction the gateway processes, it opens **one gRPC stream**
+to the processor. The exchange is **phase-by-phase**: the gateway sends a phase,
+then waits for the processor's response before sending the next phase. When the
+processor responds with `Continue`, the gateway MAY forward the processed data
+immediately (enabling streaming). If the processor responds with `hold=true`,
+the gateway MUST buffer the data — the processor will finalize it in a
+subsequent phase (e.g. mutating headers after inspecting the body). The stream
+closes when the transaction completes or the processor signals early
+termination.
+
+```
+Gateway                              Processor
+  │                                      │
+  ├─── RequestHeaders ──────────────────►│
+  │◄──── ProcessingAction ───────────────┤
+  │                                      │
+  ├─── RequestBody (chunk 1) ───────────►│
+  │◄──── ProcessingAction ───────────────┤
+  │                                      │
+  ├─── RequestBody (chunk N, final) ────►│
+  │◄──── ProcessingAction ───────────────┤
+  │                                      │
+  │   ... upstream processes request ... │
+  │                                      │
+  ├─── ResponseHeaders ─────────────────►│
+  │◄──── ProcessingAction ───────────────┤
+  │                                      │
+  ├─── ResponseBody (final) ────────────►│
+  │◄──── ProcessingAction ───────────────┤
+  │                                      │
+  ├─── stream close ────────────────────►│
+```
+
+A processor that only inspects requests can end early:
+
+```
+Gateway                              Processor
+  │                                      │
+  ├─── RequestHeaders ──────────────────►│
+  │◄──── Continue{end.response=true} ────┤  ← "request is clean, skip response"
+  │                                      │
+  ├─── stream close ────────────────────►│
+```
+
+A processor that detects a violation can short-circuit:
+
+```
+Gateway                              Processor
+  │                                      │
+  ├─── RequestHeaders ──────────────────►│
+  │◄──── Continue ───────────────────────┤
+  │                                      │
+  ├─── RequestBody ─────────────────────►│
+  │◄───── ImmediateResponse{403} ────────┤  ← "guardrail violation detected"
+  │                                      │
+  ├─── stream close ────────────────────►│
+```
+
+A processor that mutates headers based on body content (BBR-style):
+
+```
+Gateway                              Processor
+  │                                      │
+  ├─── RequestHeaders ──────────────────►│
+  │◄───── Continue{hold=true} ───────────┤  ← "don't forward headers yet"
+  │                                      │
+  ├─── RequestBody ─────────────────────►│
+  │◄───── Continue{header_mutation:{     ┤  ← hold released; headers + body
+  │        set: "x-model: math"}}        │    forwarded with mutations applied
+  │                                      │
+  ├─── stream close ────────────────────►│
+```
+
+### Transaction Cancellation
+
+If the client or upstream server abruptly terminates the HTTP transaction
+(e.g. client disconnect, server abort), the gateway MUST cancel the gRPC
+stream. The processor will observe this as a standard gRPC cancellation
+(`CANCELLED` status code) and MUST free any resources associated with the
+`transaction_id`. No explicit abort message is needed — cancellation is
+handled by the transport layer.
+
+- **Normal stream close** (half-close after final phase response) =
+  transaction completed successfully.
+- **gRPC cancellation** = transaction aborted; processor SHOULD release
+  associated resources.
+
+### Static Phase Selection
+
+Each processor declares which phases it receives in the gateway configuration.
+This is the primary mechanism for controlling what data flows to a processor.
+The in-protocol `EndPhases` (see below) can only **narrow** at runtime — it
+cannot enable phases that were not statically configured.
+
+```yaml
+processors:
+- name: sql-injection-guard
+  backendRefs:
+  - kind: Service
+    name: sql-guard
+  config:
+    timeout: "250ms"
+    failureMode: closed
+    phases:
+      requestHeaders: true
+      requestBody: true
+      responseHeaders: false
+      responseBody: false
+- name: response-pii-scanner
+  backendRefs:
+  - kind: Service
+    name: pii-scanner
+  config:
+    timeout: "500ms"
+    failureMode: closed
+    phases:
+      requestHeaders: false
+      requestBody: false
+      responseHeaders: true
+      responseBody: true
+```
+
+### Protocol Definition (Protobuf)
+
+```protobuf
+syntax = "proto3";
+package gateway.payloadprocessing.v1alpha1;
+
+// One bidirectional stream per HTTP transaction per processor.
+service PayloadProcessor {
+  rpc Process(stream PayloadPhase) returns (stream ProcessingAction);
+}
+
+// ─── Gateway → Processor ───────────────────────────────────
+
+message PayloadPhase {
+  // Opaque identifier for this HTTP transaction, stable across phases.
+  string transaction_id = 1;
+
+  // Arbitrary key/value context from the gateway configuration
+  // (e.g. tenant_id, pipeline stage). Set on the first message,
+  // MAY be omitted on subsequent phases of the same stream.
+  map<string, string> context = 2;
+
+  oneof phase {
+    HttpRequestHeaders   request_headers  = 10;
+    HttpBody             request_body     = 11;
+    HttpResponseHeaders  response_headers = 20;
+    HttpBody             response_body    = 21;
+  }
+}
+
+message HttpRequestHeaders {
+  string method    = 1;
+  string path      = 2;
+  string authority = 3;
+  string scheme    = 4;
+  // All remaining headers.
+  repeated HttpHeader headers = 5;
+  // True when no request body follows (e.g. GET).
+  bool end_of_stream = 6;
+}
+
+message HttpResponseHeaders {
+  uint32 status_code = 1;
+  repeated HttpHeader headers = 2;
+  // True when no response body follows (e.g. 204).
+  bool end_of_stream = 3;
+}
+
+message HttpBody {
+  bytes body = 1;
+  // True when this is the last (or only) chunk.
+  bool end_of_stream = 2;
+}
+
+message HttpHeader {
+  string name  = 1;
+  string value = 2;
+}
+
+// ─── Processor → Gateway ───────────────────────────────────
+
+message ProcessingAction {
+  oneof action {
+    // Accept this phase, optionally mutate, continue.
+    Continue          continue           = 1;
+    // Short-circuit: send this response to the client immediately.
+    ImmediateResponse immediate_response = 2;
+  }
+}
+
+message Continue {
+  // Optional mutations. If absent, the phase passes through unmodified.
+  HeaderMutation header_mutation = 1;
+  BodyMutation   body_mutation   = 2;
+
+  // Dynamically narrow which subsequent phases this processor
+  // receives. Can only disable phases that the static configuration
+  // has enabled — cannot enable new ones.
+  EndPhases end_phases = 3;
+
+  // If true, the gateway MUST NOT forward this phase's data yet.
+  // The processor will provide final mutations in a subsequent phase.
+  // When the processor later responds without hold (or the stream
+  // ends), all held data is released with any accumulated mutations
+  // applied.
+  // Default (false): the gateway MAY forward processed data
+  // immediately, enabling streaming.
+  bool hold = 4;
+}
+
+message EndPhases {
+  // Stop sending request body chunks. Meaningful during request
+  // headers or between request body chunks.
+  bool request_body = 1;
+  // Stop sending ALL response phases (headers and body).
+  // Meaningful during any request phase.
+  bool response = 2;
+  // Stop sending response body chunks, but still send response
+  // headers. Meaningful during response headers phase.
+  // Ignored if `response` is true.
+  bool response_body = 3;
+}
+
+message ImmediateResponse {
+  uint32 status_code          = 1;
+  repeated HttpHeader headers = 2;
+  bytes body                  = 3;
+}
+
+// ─── Mutations ─────────────────────────────────────────────
+
+message HeaderMutation {
+  // Set (upsert) these headers.
+  repeated HttpHeader set_headers    = 1;
+  // Remove headers by exact name match.
+  repeated string     remove_headers = 2;
+}
+
+message BodyMutation {
+  oneof mutation {
+    // Replace the body content with this value.
+    bytes replace = 1;
+    // Clear the body entirely.
+    bool  clear   = 2;
+  }
+}
+```
+
+### Action Semantics
+
+| Action | When | Effect |
+|---|---|---|
+| `Continue{}` | Any phase | Pass through unmodified, proceed to next phase. |
+| `Continue{header_mutation, body_mutation}` | Any phase | Apply mutations, proceed. |
+| `Continue{end_phases.response=true}` | Request phases | "I'm done — don't show me the response." |
+| `Continue{end_phases.request_body=true}` | Request headers / body | "I've seen enough of the request body." |
+| `Continue{end_phases.response_body=true}` | Response headers | "I only needed to see response headers." |
+| `Continue{hold=true}` | Any phase | Buffer this data; processor will finalize in a later phase. |
+| `Continue{hold=true}` then `Continue{header_mutation}` | Headers then body | BBR pattern: mutate headers after inspecting body. |
+| `ImmediateResponse` | Any phase | Short-circuit; gateway sends this response to client, closes stream. |
+
+### What the Protocol Does NOT Define
+
+The following remain gateway-level configuration concerns:
+
+* **Timeout** per processor
+* **Failure mode** (open / closed)
+* **Static phase selection** (which phases to send)
+* **Pipeline ordering** and concurrency between (non-mutating) processors
+* **Load balancing** across processor replicas
+
 ## Open Design Questions
 
-* Payload Processors MUST implement a custom (gRPC?) protocol (specifics TBD, part of a future PR). This protocol allows them to receive phases of the request lifecycle and emit one of several signals, such as:
-    * "give me the next part"
-    * "this request is approved"
-    * rejection of the request/response
-    * "this response is approved"
-    * "change this part I received to be as follows: ..."
-* Payload Processors MAY receive additional context as part of their configuration... Is this a real use case?
 * We need to figure out whether to allow conceptual "processing loops" between `spec.rules.matches` and **mutating** payload processors.
     * Would an approach that avoids processing loops between `spec.rules.matches` and Payload Processors be making any use case impossible to implement?
 * There is potential overlap between `spec.rules.filters` and `spec.rules.processors`:
@@ -284,8 +575,6 @@ spec:
     * Do we allow defining both? (current assumption is that it is allowed)
     * How do we co-prioritize them?
 * Expressibility of concurrency between Pipeline `.spec.rules` list items (perhaps as second-level list)
-
-
 
 # Relevant Links
 
