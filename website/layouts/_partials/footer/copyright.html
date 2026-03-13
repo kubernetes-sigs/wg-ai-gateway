@@ -1,0 +1,16 @@
+{{ $page := .Page -}}
+
+{{/* Custom copyright for AI Gateway WG */ -}}
+<span class="td-footer__copyright">&copy;
+  {{ now.Year }}
+  <span class="td-footer__authors">
+    {{- .Site.Params.copyright | default "The Kubernetes Authors" -}}
+  </span>
+</span>
+
+{{/* Linux Foundation Trademark */ -}}
+{{ with .Site.Params.ui.footer_about.trademark -}}
+  <div class="td-footer__trademark mt-2">
+    {{- . | safeHTML -}}
+  </div>
+{{- end -}}

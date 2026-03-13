@@ -1,0 +1,60 @@
+<svg width="1920" height="1080" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="grad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#1a1a2e;stop-opacity:1" />
+      <stop offset="50%" style="stop-color:#16213e;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0f3460;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="grad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#326ce5;stop-opacity:0.3" />
+      <stop offset="100%" style="stop-color:#326ce5;stop-opacity:0" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="1920" height="1080" fill="url(#grad1)"/>
+  
+  <!-- Abstract network nodes -->
+  <circle cx="200" cy="150" r="3" fill="#326ce5" opacity="0.6"/>
+  <circle cx="400" cy="300" r="2" fill="#326ce5" opacity="0.4"/>
+  <circle cx="600" cy="200" r="4" fill="#326ce5" opacity="0.5"/>
+  <circle cx="800" cy="400" r="2" fill="#326ce5" opacity="0.3"/>
+  <circle cx="1000" cy="250" r="3" fill="#326ce5" opacity="0.6"/>
+  <circle cx="1200" cy="350" r="2" fill="#326ce5" opacity="0.4"/>
+  <circle cx="1400" cy="200" r="3" fill="#326ce5" opacity="0.5"/>
+  <circle cx="1600" cy="300" r="2" fill="#326ce5" opacity="0.3"/>
+  <circle cx="1800" cy="150" r="4" fill="#326ce5" opacity="0.6"/>
+  
+  <circle cx="300" cy="500" r="2" fill="#326ce5" opacity="0.3"/>
+  <circle cx="500" cy="600" r="3" fill="#326ce5" opacity="0.5"/>
+  <circle cx="700" cy="550" r="2" fill="#326ce5" opacity="0.4"/>
+  <circle cx="900" cy="650" r="3" fill="#326ce5" opacity="0.6"/>
+  <circle cx="1100" cy="500" r="2" fill="#326ce5" opacity="0.3"/>
+  <circle cx="1300" cy="600" r="3" fill="#326ce5" opacity="0.5"/>
+  <circle cx="1500" cy="550" r="2" fill="#326ce5" opacity="0.4"/>
+  <circle cx="1700" cy="650" r="3" fill="#326ce5" opacity="0.6"/>
+  
+  <circle cx="200" cy="800" r="3" fill="#326ce5" opacity="0.4"/>
+  <circle cx="400" cy="900" r="2" fill="#326ce5" opacity="0.3"/>
+  <circle cx="600" cy="850" r="4" fill="#326ce5" opacity="0.5"/>
+  <circle cx="800" cy="950" r="2" fill="#326ce5" opacity="0.4"/>
+  <circle cx="1000" cy="800" r="3" fill="#326ce5" opacity="0.6"/>
+  <circle cx="1200" cy="900" r="2" fill="#326ce5" opacity="0.3"/>
+  <circle cx="1400" cy="850" r="3" fill="#326ce5" opacity="0.5"/>
+  <circle cx="1600" cy="950" r="2" fill="#326ce5" opacity="0.4"/>
+  <circle cx="1800" cy="800" r="4" fill="#326ce5" opacity="0.6"/>
+  
+  <!-- Connection lines -->
+  <line x1="200" y1="150" x2="400" y2="300" stroke="#326ce5" stroke-width="0.5" opacity="0.2"/>
+  <line x1="400" y1="300" x2="600" y2="200" stroke="#326ce5" stroke-width="0.5" opacity="0.2"/>
+  <line x1="600" y1="200" x2="800" y2="400" stroke="#326ce5" stroke-width="0.5" opacity="0.2"/>
+  <line x1="1000" y1="250" x2="1200" y2="350" stroke="#326ce5" stroke-width="0.5" opacity="0.2"/>
+  <line x1="1400" y1="200" x2="1600" y2="300" stroke="#326ce5" stroke-width="0.5" opacity="0.2"/>
+  
+  <!-- Kubernetes-style hexagon pattern (subtle) -->
+  <g opacity="0.05">
+    <path d="M 960 540 L 1020 510 L 1080 540 L 1080 600 L 1020 630 L 960 600 Z" fill="none" stroke="#326ce5" stroke-width="2"/>
+    <path d="M 840 540 L 900 510 L 960 540 L 960 600 L 900 630 L 840 600 Z" fill="none" stroke="#326ce5" stroke-width="2"/>
+    <path d="M 1080 540 L 1140 510 L 1200 540 L 1200 600 L 1140 630 L 1080 600 Z" fill="none" stroke="#326ce5" stroke-width="2"/>
+  </g>
+</svg>

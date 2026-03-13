@@ -1,0 +1,43 @@
+{{ define "main" }}
+{{ partial "page-meta-links.html" . }}
+<section class="row td-box td-box--white td-box--height-auto">
+  <div class="col">
+    <div class="container">
+      <h1>{{ .Title }}</h1>
+      <p class="lead">{{ .Description }}</p>
+      
+      {{ .Content }}
+      
+      {{ if .Pages }}
+      <div class="row">
+        {{ range .Pages.ByWeight }}
+        <div class="col-lg-6 mb-4">
+          <div class="card h-100">
+            <div class="card-body">
+              <h3 class="card-title h5">
+                <a href="{{ .RelPermalink }}" class="text-decoration-none">{{ .Title }}</a>
+              </h3>
+              {{ with .Params.authors }}
+              <p class="text-muted mb-2">
+                <small>Authors: {{ delimit . ", " }}</small>
+              </p>
+              {{ end }}
+              {{ with .Params.status }}
+              <p class="text-muted mb-2">
+                <small>Status: <span class="badge bg-primary">{{ . }}</span></small>
+              </p>
+              {{ end }}
+              <p class="card-text">{{ .Description | default .Summary | truncate 150 }}</p>
+              <a href="{{ .RelPermalink }}" class="btn btn-primary">Read Proposal</a>
+            </div>
+          </div>
+        </div>
+        {{ end }}
+      </div>
+      {{ end }}
+    </div>
+  </div>
+</section>
+
+{{ partial "feedback.html" . }}
+{{ end }}

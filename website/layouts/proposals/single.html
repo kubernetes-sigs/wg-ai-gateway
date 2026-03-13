@@ -1,0 +1,30 @@
+{{ define "main" }}
+{{ partial "page-meta-links.html" . }}
+<section class="row td-box td-box--white td-box--height-auto">
+  <div class="col">
+    <div class="container">
+      <h1>{{ .Title }}</h1>
+      
+      {{ with .Params.authors }}
+      <p class="text-muted"><strong>Authors:</strong> {{ delimit . ", " }}</p>
+      {{ end }}
+      
+      {{ with .Params.status }}
+      <p class="text-muted"><strong>Status:</strong> <span class="badge bg-primary">{{ . }}</span></p>
+      {{ end }}
+      
+      <div class="td-content">
+        {{ .Content }}
+      </div>
+      
+      <div class="mt-5">
+        <a href="https://github.com/kubernetes-sigs/wg-ai-gateway/blob/main/proposals/" class="btn btn-outline-primary" target="_blank" rel="noopener">
+          View All Proposals on GitHub
+        </a>
+      </div>
+    </div>
+  </div>
+</section>
+
+{{ partial "feedback.html" . }}
+{{ end }}

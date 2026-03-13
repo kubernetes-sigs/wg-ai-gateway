@@ -1,0 +1,479 @@
+/* AI Gateway Working Group - Custom Styles */
+
+/* Hero Section Background Image */
+.td-cover-block--height-full {
+  background-image: linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url('/images/vecteezy_gradient-blue-color-background-vector-for-banners-flyers_27850929.jpg');
+  background-size: cover;
+  background-position: center;
+  background-repeat: no-repeat;
+}
+
+/* Ensure content is above the background */
+.td-overlay__inner {
+  position: relative;
+  z-index: 1;
+}
+
+/* Hero title styling */
+.td-cover-block .display-1 {
+  font-weight: 700;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+/* Hero lead text */
+.td-cover-block .lead {
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.5);
+}
+
+/* Smooth scrolling */
+html {
+  scroll-behavior: smooth;
+}
+
+/* Card hover effects for Get Involved section */
+.td-box--light .col-lg-4 {
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+}
+
+.td-box--light .col-lg-4:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}
+
+/* Icon styling */
+.td-box--light .h1 i {
+  transition: color 0.3s ease;
+}
+
+.td-box--light .col-lg-4:hover .h1 i {
+  color: #326ce5;
+}
+
+/* Section padding */
+.td-box {
+  padding: 4rem 0;
+}
+
+@media (min-width: 768px) {
+  .td-box {
+    padding: 6rem 0;
+  }
+}
+
+/* Right align Get Involved and Quick Links sections */
+.td-box--light.text-right,
+.td-box--white.text-right {
+  text-align: right !important;
+}
+
+.td-box--light.text-right .row,
+.td-box--white.text-right .row {
+  justify-content: flex-end !important;
+}
+
+/* Center align heading and intro text in Get Involved section */
+#get-involved {
+  text-align: center !important;
+  width: 100% !important;
+}
+
+#get-involved + p {
+  text-align: center !important;
+  padding-bottom: 40px;
+  width: 100% !important;
+}
+
+/* Current Proposals section padding */
+#current-proposals {
+  padding-bottom: 30px !important;
+  padding-top: 30px;
+}
+
+/* Center align community page content - COMPLETE REDESIGN */
+.td-community-page .td-content {
+  max-width: 1000px;
+  padding: 3rem 1rem !important;
+}
+
+.td-content{
+  margin-left: 5rem;
+}
+
+
+.td-community-page h1 {
+  text-align: center !important;
+  font-size: 2.5rem !important;
+  font-weight: 700 !important;
+  margin-bottom: 1rem !important;
+  color: #1a1a2e !important;
+}
+
+.td-community-page h2 {
+  text-align: center !important;
+  font-size: 1.8rem !important;
+  font-weight: 600 !important;
+  margin-top: 3rem !important;
+  margin-bottom: 1.5rem !important;
+  color: #326ce5 !important;
+  position: relative;
+  padding-bottom: 0.5rem;
+}
+
+.td-community-page h2::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 60px;
+  height: 3px;
+  background: linear-gradient(90deg, #326ce5, #0d6efd);
+  border-radius: 2px;
+}
+
+.td-community-page h3 {
+  text-align: center !important;
+  font-size: 1.3rem !important;
+  font-weight: 600 !important;
+  margin-top: 2rem !important;
+  margin-bottom: 1rem !important;
+  color: #16213e !important;
+}
+
+.td-community-page p {
+  text-align: center !important;
+  font-size: 1.1rem !important;
+  line-height: 1.8 !important;
+  color: #4a5568 !important;
+  margin-bottom: 1.5rem !important;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.td-community-page a {
+  color: #326ce5 !important;
+  text-decoration: none !important;
+  font-weight: 500 !important;
+  transition: all 0.3s ease !important;
+  padding: 0.25rem 0.5rem !important;
+  border-radius: 4px !important;
+}
+
+.td-community-page a:hover {
+  color: #0d6efd !important;
+  background-color: rgba(50, 108, 229, 0.1) !important;
+}
+
+.td-community-page ul,
+.td-community-page ol {
+  text-align: left !important;
+  max-width: 700px;
+  margin: 2rem auto !important;
+  padding: 2rem !important;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+  border-radius: 12px !important;
+  border: 1px solid #dee2e6 !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+.td-community-page ul li,
+.td-community-page ol li {
+  margin-bottom: 1rem !important;
+  line-height: 1.8 !important;
+  color: #2d3748 !important;
+  font-size: 1.05rem !important;
+  padding-left: 0.5rem !important;
+}
+
+.td-community-page ul li:last-child,
+.td-community-page ol li:last-child {
+  margin-bottom: 0 !important;
+}
+
+.td-community-page strong {
+  font-weight: 600 !important;
+  color: #1a202c !important;
+}
+
+.td-community-page code {
+  background-color: #edf2f7 !important;
+  padding: 0.2rem 0.4rem !important;
+  border-radius: 4px !important;
+  color: #e53e3e !important;
+  font-size: 0.9em !important;
+}
+.td-community-page ul,
+.td-community-page ol {
+  text-align: center !important;
+  margin-bottom: 1.5rem !important;
+  display: inline-block !important;
+}
+
+.td-community-page li {
+  text-align: left !important;
+  margin-bottom: 0.5rem !important;
+  line-height: 1.6 !important;
+}
+
+.td-community-page a {
+  display: inline-block !important;
+  margin: 0.5rem 0 !important;
+}
+
+.td-community-page strong {
+  font-weight: 600 !important;
+}
+
+/* Footer styling - remove top padding */
+.td-footer {
+  padding-top: 30px !important;
+}
+
+/* Footer trademark styling */
+.td-footer__trademark {
+  font-size: 0.75rem;
+  color: rgba(255, 255, 255, 0.7);
+  margin-top: 0.5rem;
+}
+
+.td-footer__trademark a {
+  color: rgba(255, 255, 255, 0.9);
+  text-decoration: underline;
+}
+
+.td-footer__trademark a:hover {
+  color: #fff;
+}
+
+/* Community Channels Cards */
+.community-channels {
+  margin: 3rem 0 !important;
+}
+
+.channel-card {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  transition: all 0.3s ease !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+  
+  &:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 8px 16px rgba(50, 108, 229, 0.15) !important;
+    border-color: #326ce5 !important;
+  }
+  
+  .channel-icon {
+    color: #326ce5 !important;
+  }
+  
+  .card-text {
+    color: #4a5568 !important;
+    font-size: 0.95rem !important;
+    line-height: 1.6 !important;
+    margin-bottom: 1.5rem !important;
+  }
+  
+  .btn {
+    background-color: #326ce5 !important;
+    border-color: #326ce5 !important;
+    border-radius: 6px !important;
+    padding: 0.5rem 1.5rem !important;
+    font-weight: 500 !important;
+    transition: all 0.3s ease !important;
+    
+    &:hover {
+      background-color: #0d6efd !important;
+      border-color: #0d6efd !important;
+      transform: translateY(-2px) !important;
+    }
+  }
+}
+
+/* Community Meetings Card */
+.community-meetings {
+  margin: 4rem 0 !important;
+}
+
+.meeting-card {
+  max-width: 800px;
+  margin: 0 auto !important;
+  border: 2px solid #326ce5 !important;
+  border-radius: 16px !important;
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%) !important;
+  box-shadow: 0 4px 12px rgba(50, 108, 229, 0.15) !important;
+  transition: all 0.3s ease !important;
+  
+  &:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 8px 24px rgba(50, 108, 229, 0.25) !important;
+  }
+  
+  .meeting-icon {
+    color: #326ce5 !important;
+  }
+  
+  .h4 {
+    color: #1a1a2e !important;
+    font-weight: 700 !important;
+    margin-bottom: 0.5rem !important;
+  }
+  
+  .lead {
+    color: #4a5568 !important;
+    font-size: 1.1rem !important;
+    margin-bottom: 2rem !important;
+  }
+  
+  .meeting-details {
+    text-align: left;
+    max-width: 600px;
+    margin: 0 auto !important;
+    padding: 2rem;
+    background: white !important;
+    border-radius: 12px !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+  }
+  
+  .detail-item {
+    display: flex;
+    align-items: center;
+    margin-bottom: 1.5rem !important;
+    font-size: 1.05rem !important;
+    color: #2d3748 !important;
+    line-height: 1.6 !important;
+    
+    &:last-child {
+      margin-bottom: 0 !important;
+    }
+    
+    i {
+      color: #326ce5 !important;
+      font-size: 1.3rem !important;
+      margin-right: 1rem !important;
+      width: 30px;
+      text-align: center;
+    }
+    
+    a {
+      color: #326ce5 !important;
+      text-decoration: none !important;
+      font-weight: 500 !important;
+      
+      &:hover {
+        text-decoration: underline !important;
+      }
+    }
+  }
+  
+  .btn-lg {
+    padding: 0.75rem 2rem !important;
+    font-size: 1.1rem !important;
+    border-radius: 8px !important;
+    background-color: #326ce5 !important;
+    border-color: #326ce5 !important;
+    transition: all 0.3s ease !important;
+    
+    &:hover {
+      background-color: #0d6efd !important;
+      border-color: #0d6efd !important;
+      transform: translateY(-2px) !important;
+      box-shadow: 0 4px 12px rgba(13, 110, 253, 0.3) !important;
+    }
+    
+    i {
+      margin-right: 0.5rem !important;
+    }
+  }
+}
+
+/* Get Involved Section - Cards in Row */
+.get-involved-row {
+  margin: 3rem 0 !important;
+}
+
+.involve-card {
+  border: 1px solid #e2e8f0 !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05) !important;
+  transition: all 0.3s ease !important;
+  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%) !important;
+  
+  &:hover {
+    transform: translateY(-5px) !important;
+    box-shadow: 0 8px 16px rgba(50, 108, 229, 0.15) !important;
+    border-color: #326ce5 !important;
+  }
+  
+  .h4 {
+    color: #1a1a2e !important;
+    font-weight: 700 !important;
+    
+    i {
+      margin-right: 0.5rem !important;
+    }
+  }
+  
+  .involve-list {
+    list-style: none !important;
+    padding: 0 !important;
+    margin: 2rem 1rem !important;
+    
+    li {
+      margin-bottom: 1rem !important;
+      line-height: 1.6 !important;
+      color: #2d3748 !important;
+      font-size: 1rem !important;
+      display: flex;
+      align-items: flex-start;
+      
+      i {
+        color: #326ce5 !important;
+        margin-right: 0.75rem !important;
+        margin-top: 0.25rem !important;
+        font-size: 1.1rem !important;
+        min-width: 20px;
+      }
+      
+      strong {
+        font-weight: 600 !important;
+        color: #1a202c !important;
+      }
+      
+      &:last-child {
+        margin-bottom: 0 !important;
+      }
+    }
+  }
+}
+
+/* Get Involved Section - Simple Row Layout */
+.get-involved-row {
+  margin: 3rem 0 !important;
+  padding: 2rem !important;
+  background-color: #f8f9fa !important;
+  border-radius: 8px !important;
+}
+
+.get-involved-row h3 {
+  color: #326ce5 !important;
+  font-weight: 600 !important;
+  margin-bottom: 1rem !important;
+}
+
+.get-involved-row ul,
+.get-involved-row ol {
+  padding-left: 1.5rem !important;
+  margin-bottom: 0 !important;
+}
+
+.get-involved-row li {
+  margin-bottom: 0.75rem !important;
+  line-height: 1.6 !important;
+  color: #2d3748 !important;
+}
+
+.get-involved-row strong {
+  font-weight: 600 !important;
+  color: #1a202c !important;
+}
