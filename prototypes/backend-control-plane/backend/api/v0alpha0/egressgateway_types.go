@@ -119,10 +119,11 @@ type EgressGatewayBackendTLS struct {
 	// +required
 	Mode BackendTLSMode `json:"mode"`
 
-	// caBundleRef defines references to CA bundles for validating backend certificates.
+	// caCertificateRefs references one or more objects containing CA certificates
+	// for validating backend server certificates.
 	// Defaults to system CAs if not specified.
 	// +optional
-	CaBundleRef []gatewayv1.ObjectReference `json:"caBundleRef,omitempty"`
+	CACertificateRefs []gatewayv1.ObjectReference `json:"caCertificateRefs,omitempty"`
 
 	// insecureSkipVerify disables TLS certificate verification for backend connections.
 	// +optional
@@ -132,9 +133,11 @@ type EgressGatewayBackendTLS struct {
 	// +optional
 	ClientCertificateRef *gatewayv1.SecretObjectReference `json:"clientCertificateRef,omitempty"`
 
-	// subjectAltNames defines the acceptable subject alternative names for backend certificates.
+	// subjectAltNames defines the acceptable subject alternative names for
+	// backend certificates. Uses the Gateway API SubjectAltName type which
+	// supports both Hostname and URI SAN types.
 	// +optional
-	SubjectAltNames []string `json:"subjectAltNames,omitempty"`
+	SubjectAltNames []gatewayv1.SubjectAltName `json:"subjectAltNames,omitempty"`
 }
 
 // EgressGatewayStatus defines the observed state of EgressGateway.

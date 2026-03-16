@@ -85,9 +85,10 @@ spec:
                   backendTLS defines gateway-wide default TLS settings for backend connections.
                   Individual backends can override these defaults.
                 properties:
-                  caBundleRef:
+                  caCertificateRefs:
                     description: |-
-                      caBundleRef defines references to CA bundles for validating backend certificates.
+                      caCertificateRefs references one or more objects containing CA certificates
+                      for validating backend server certificates.
                       Defaults to system CAs if not specified.
                     items:
                       description: |-
@@ -194,10 +195,64 @@ spec:
                     - None
                     type: string
                   subjectAltNames:
-                    description: subjectAltNames defines the acceptable subject alternative
-                      names for backend certificates.
+                    description: |-
+                      subjectAltNames defines the acceptable subject alternative names for
+                      backend certificates. Uses the Gateway API SubjectAltName type which
+                      supports both Hostname and URI SAN types.
                     items:
-                      type: string
+                      description: SubjectAltName represents Subject Alternative Name.
+                      properties:
+                        hostname:
+                          description: |-
+                            Hostname contains Subject Alternative Name specified in DNS name format.
+                            Required when Type is set to Hostname, ignored otherwise.
+
+                            Support: Core
+                          maxLength: 253
+                          minLength: 1
+                          pattern: ^(\*\.)?[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*$
+                          type: string
+                        type:
+                          description: |-
+                            Type determines the format of the Subject Alternative Name. Always required.
+
+                            Support: Core
+                          enum:
+                          - Hostname
+                          - URI
+                          type: string
+                        uri:
+                          description: |-
+                            URI contains Subject Alternative Name specified in a full URI format.
+                            It MUST include both a scheme (e.g., "http" or "ftp") and a scheme-specific-part.
+                            Common values include SPIFFE IDs like "spiffe://mycluster.example.com/ns/myns/sa/svc1sa".
+                            Required when Type is set to URI, ignored otherwise.
+
+                            Support: Core
+                          maxLength: 253
+                          minLength: 1
+                          pattern: ^(([^:/?#]+):)(//([^/?#]*))([^?#]*)(\?([^#]*))?(#(.*))?
+                          type: string
+                      required:
+                      - type
+                      type: object
+                      x-kubernetes-validations:
+                      - message: SubjectAltName element must contain Hostname, if
+                          Type is set to Hostname
+                        rule: '!(self.type == "Hostname" && (!has(self.hostname) ||
+                          self.hostname == ""))'
+                      - message: SubjectAltName element must not contain Hostname,
+                          if Type is not set to Hostname
+                        rule: '!(self.type != "Hostname" && has(self.hostname) &&
+                          self.hostname != "")'
+                      - message: SubjectAltName element must contain URI, if Type
+                          is set to URI
+                        rule: '!(self.type == "URI" && (!has(self.uri) || self.uri
+                          == ""))'
+                      - message: SubjectAltName element must not contain URI, if Type
+                          is not set to URI
+                        rule: '!(self.type != "URI" && has(self.uri) && self.uri !=
+                          "")'
                     type: array
                 required:
                 - mode
