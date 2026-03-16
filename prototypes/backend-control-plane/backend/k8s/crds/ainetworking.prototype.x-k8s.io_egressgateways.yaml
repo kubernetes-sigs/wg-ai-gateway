@@ -193,10 +193,6 @@ spec:
                     - Mutual
                     - None
                     type: string
-                  sni:
-                    description: sni defines the server name indication to present
-                      to backend servers.
-                    type: string
                   subjectAltNames:
                     description: subjectAltNames defines the acceptable subject alternative
                       names for backend certificates.

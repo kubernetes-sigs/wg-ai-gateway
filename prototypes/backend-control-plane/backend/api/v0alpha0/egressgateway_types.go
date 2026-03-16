@@ -119,10 +119,6 @@ type EgressGatewayBackendTLS struct {
 	// +required
 	Mode BackendTLSMode `json:"mode"`
 
-	// sni defines the server name indication to present to backend servers.
-	// +optional
-	SNI string `json:"sni,omitempty"`
-
 	// caBundleRef defines references to CA bundles for validating backend certificates.
 	// Defaults to system CAs if not specified.
 	// +optional
