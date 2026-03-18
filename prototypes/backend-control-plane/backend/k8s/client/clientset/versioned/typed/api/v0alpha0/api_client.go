@@ -28,12 +28,17 @@ import (
 
 type AinetworkingV0alpha0Interface interface {
 	RESTClient() rest.Interface
+	EgressGatewaysGetter
 	XBackendDestinationsGetter
 }
 
 // AinetworkingV0alpha0Client is used to interact with features provided by the ainetworking.prototype.x-k8s.io group.
 type AinetworkingV0alpha0Client struct {
 	restClient rest.Interface
+}
+
+func (c *AinetworkingV0alpha0Client) EgressGateways(namespace string) EgressGatewayInterface {
+	return newEgressGateways(c, namespace)
 }
 
 func (c *AinetworkingV0alpha0Client) XBackendDestinations(namespace string) XBackendDestinationInterface {
