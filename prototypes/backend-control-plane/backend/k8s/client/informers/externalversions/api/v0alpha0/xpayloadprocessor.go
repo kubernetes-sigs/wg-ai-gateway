@@ -32,71 +32,71 @@ import (
 	apiv0alpha0 "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/listers/api/v0alpha0"
 )
 
-// XBackendDestinationInformer provides access to a shared informer and lister for
-// XBackendDestinations.
-type XBackendDestinationInformer interface {
+// XPayloadProcessorInformer provides access to a shared informer and lister for
+// XPayloadProcessors.
+type XPayloadProcessorInformer interface {
 	Informer() cache.SharedIndexInformer
-	Lister() apiv0alpha0.XBackendDestinationLister
+	Lister() apiv0alpha0.XPayloadProcessorLister
 }
 
-type xBackendDestinationInformer struct {
+type xPayloadProcessorInformer struct {
 	factory          internalinterfaces.SharedInformerFactory
 	tweakListOptions internalinterfaces.TweakListOptionsFunc
 	namespace        string
 }
 
-// NewXBackendDestinationInformer constructs a new informer for XBackendDestination type.
+// NewXPayloadProcessorInformer constructs a new informer for XPayloadProcessor type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewXBackendDestinationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
-	return NewFilteredXBackendDestinationInformer(client, namespace, resyncPeriod, indexers, nil)
+func NewXPayloadProcessorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers) cache.SharedIndexInformer {
+	return NewFilteredXPayloadProcessorInformer(client, namespace, resyncPeriod, indexers, nil)
 }
 
-// NewFilteredXBackendDestinationInformer constructs a new informer for XBackendDestination type.
+// NewFilteredXPayloadProcessorInformer constructs a new informer for XPayloadProcessor type.
 // Always prefer using an informer factory to get a shared informer instead of getting an independent
 // one. This reduces memory footprint and number of connections to the server.
-func NewFilteredXBackendDestinationInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
+func NewFilteredXPayloadProcessorInformer(client versioned.Interface, namespace string, resyncPeriod time.Duration, indexers cache.Indexers, tweakListOptions internalinterfaces.TweakListOptionsFunc) cache.SharedIndexInformer {
 	return cache.NewSharedIndexInformer(
 		&cache.ListWatch{
 			ListFunc: func(options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AinetworkingV0alpha0().XBackendDestinations(namespace).List(context.Background(), options)
+				return client.AinetworkingV0alpha0().XPayloadProcessors(namespace).List(context.Background(), options)
 			},
 			WatchFunc: func(options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AinetworkingV0alpha0().XBackendDestinations(namespace).Watch(context.Background(), options)
+				return client.AinetworkingV0alpha0().XPayloadProcessors(namespace).Watch(context.Background(), options)
 			},
 			ListWithContextFunc: func(ctx context.Context, options v1.ListOptions) (runtime.Object, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AinetworkingV0alpha0().XBackendDestinations(namespace).List(ctx, options)
+				return client.AinetworkingV0alpha0().XPayloadProcessors(namespace).List(ctx, options)
 			},
 			WatchFuncWithContext: func(ctx context.Context, options v1.ListOptions) (watch.Interface, error) {
 				if tweakListOptions != nil {
 					tweakListOptions(&options)
 				}
-				return client.AinetworkingV0alpha0().XBackendDestinations(namespace).Watch(ctx, options)
+				return client.AinetworkingV0alpha0().XPayloadProcessors(namespace).Watch(ctx, options)
 			},
 		},
-		&backendapiv0alpha0.XBackendDestination{},
+		&backendapiv0alpha0.XPayloadProcessor{},
 		resyncPeriod,
 		indexers,
 	)
 }
 
-func (f *xBackendDestinationInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
-	return NewFilteredXBackendDestinationInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
+func (f *xPayloadProcessorInformer) defaultInformer(client versioned.Interface, resyncPeriod time.Duration) cache.SharedIndexInformer {
+	return NewFilteredXPayloadProcessorInformer(client, f.namespace, resyncPeriod, cache.Indexers{cache.NamespaceIndex: cache.MetaNamespaceIndexFunc}, f.tweakListOptions)
 }
 
-func (f *xBackendDestinationInformer) Informer() cache.SharedIndexInformer {
-	return f.factory.InformerFor(&backendapiv0alpha0.XBackendDestination{}, f.defaultInformer)
+func (f *xPayloadProcessorInformer) Informer() cache.SharedIndexInformer {
+	return f.factory.InformerFor(&backendapiv0alpha0.XPayloadProcessor{}, f.defaultInformer)
 }
 
-func (f *xBackendDestinationInformer) Lister() apiv0alpha0.XBackendDestinationLister {
-	return apiv0alpha0.NewXBackendDestinationLister(f.Informer().GetIndexer())
+func (f *xPayloadProcessorInformer) Lister() apiv0alpha0.XPayloadProcessorLister {
+	return apiv0alpha0.NewXPayloadProcessorLister(f.Informer().GetIndexer())
 }

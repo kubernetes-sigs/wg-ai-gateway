@@ -80,9 +80,11 @@ func translateHTTPRouteToEnvoyRoutes(
 	httpRoute *gatewayv1.HTTPRoute,
 	serviceLister corev1listers.ServiceLister,
 	backendLister aigatewaylisters.XBackendDestinationLister,
-) ([]*routev3.Route, []RouteBackend, metav1.Condition) {
+	processorLister aigatewaylisters.XPayloadProcessorLister,
+) ([]*routev3.Route, []RouteBackend, []*v0alpha0.XPayloadProcessor, metav1.Condition) {
 	var envoyRoutes []*routev3.Route
 	var allValidBackends []RouteBackend
+	var allProcessors []*v0alpha0.XPayloadProcessor
 	overallCondition := createSuccessCondition(httpRoute.Generation)
 
 	for ruleIndex, rule := range httpRoute.Spec.Rules {
@@ -115,8 +117,21 @@ func translateHTTPRouteToEnvoyRoutes(
 			case gatewayv1.HTTPRouteFilterURLRewrite:
 				urlRewriteAction = translateURLRewriteFilter(filter.URLRewrite)
 			case gatewayv1.HTTPRouteFilterExtensionRef:
-				// Extension filters are implementation-specific and would need custom handling
-				klog.Infof("ExtensionRef filter not implemented: %v", filter.ExtensionRef)
+				if filter.ExtensionRef != nil && string(filter.ExtensionRef.Kind) == "XPayloadProcessor" {
+					processor, err := processorLister.XPayloadProcessors(httpRoute.Namespace).Get(string(filter.ExtensionRef.Name))
+					if err != nil {
+						overallCondition = createFailureCondition(
+							gatewayv1.RouteReasonBackendNotFound,
+							fmt.Sprintf("XPayloadProcessor %s/%s not found", httpRoute.Namespace, filter.ExtensionRef.Name),
+							httpRoute.Generation,
+						)
+						klog.Warningf("Failed to resolve XPayloadProcessor %s/%s: %v", httpRoute.Namespace, filter.ExtensionRef.Name, err)
+					} else {
+						allProcessors = append(allProcessors, processor)
+					}
+				} else {
+					klog.Infof("Unsupported ExtensionRef filter: %v", filter.ExtensionRef)
+				}
 			default:
 				// Unsupported filter type; skip
 				klog.Warningf("Unsupported HTTPRoute filter type: %s", filter.Type)
@@ -202,7 +217,7 @@ func translateHTTPRouteToEnvoyRoutes(
 	// Sort routes by Gateway API precedence rules
 	sortRoutes(envoyRoutes)
 
-	return envoyRoutes, allValidBackends, overallCondition
+	return envoyRoutes, allValidBackends, allProcessors, overallCondition
 }
 
 func translateRequestRedirectFilter(requestRedirect *gatewayv1.HTTPRequestRedirectFilter) *routev3.RedirectAction {

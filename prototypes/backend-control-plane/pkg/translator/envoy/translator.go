@@ -24,6 +24,7 @@ import (
 	gatewayclientset "sigs.k8s.io/gateway-api/pkg/client/clientset/versioned"
 	gatewaylisters "sigs.k8s.io/gateway-api/pkg/client/listers/apis/v1"
 
+	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/api/v0alpha0"
 	aigatewaylisters "sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/backend/k8s/client/listers/api/v0alpha0"
 	"sigs.k8s.io/wg-ai-gateway/prototypes/backend-control-plane/pkg/constants"
 )
@@ -45,6 +46,7 @@ type translator struct {
 	gatewayLister       gatewaylisters.GatewayLister
 	httprouteLister     gatewaylisters.HTTPRouteLister
 	backendLister       aigatewaylisters.XBackendDestinationLister
+	processorLister     aigatewaylisters.XPayloadProcessorLister
 }
 
 func New(
@@ -57,6 +59,7 @@ func New(
 	gatewayLister gatewaylisters.GatewayLister,
 	httpRouteLister gatewaylisters.HTTPRouteLister,
 	backendLister aigatewaylisters.XBackendDestinationLister,
+	processorLister aigatewaylisters.XPayloadProcessorLister,
 ) Translator {
 	return &translator{
 		kubeClient:          kubeClient,
@@ -68,6 +71,7 @@ func New(
 		gatewayLister:       gatewayLister,
 		httprouteLister:     httpRouteLister,
 		backendLister:       backendLister,
+		processorLister:     processorLister,
 	}
 }
 
@@ -379,11 +383,15 @@ func (t *translator) buildEnvoyListenerForPort(
 		// Now translate the listener into an Envoy route if the protocol is valid (e.g. HTTP/HTTPS/GRPC)
 		switch listener.Protocol {
 		case gatewayv1.HTTPProtocolType, gatewayv1.HTTPSProtocolType:
+			var allProcessorsForListener []*v0alpha0.XPayloadProcessor
 			for _, route := range routesByListener[listener.Name] {
-				routes, allValidBackends, resolvedRefsCondition := translateHTTPRouteToEnvoyRoutes(route, t.serviceLister, t.backendLister)
+				routes, allValidBackends, processors, resolvedRefsCondition := translateHTTPRouteToEnvoyRoutes(route, t.serviceLister, t.backendLister, t.processorLister)
 
 				// Track backends for EDS generation
 				allBackendsForListener = append(allBackendsForListener, allValidBackends...)
+
+				// Collect processors referenced by routes on this listener
+				allProcessorsForListener = append(allProcessorsForListener, processors...)
 
 				// Update the route status with ResolvedRefs condition
 				key := types.NamespacedName{Name: route.Name, Namespace: route.Namespace}
@@ -424,6 +432,12 @@ func (t *translator) buildEnvoyListenerForPort(
 				}
 			}
 
+			// Build gRPC clusters for payload processors
+			processorClusters := buildProcessorClusters(allProcessorsForListener)
+			for _, cluster := range processorClusters {
+				envoyClusters[cluster.Name] = cluster
+			}
+
 			// Create filter chain for this listener
 			// Build route config first
 			allVirtualHosts := make([]*routev3.VirtualHost, 0, len(virtualHostsforPort))
@@ -439,7 +453,7 @@ func (t *translator) buildEnvoyListenerForPort(
 				VirtualHosts: allVirtualHosts,
 			}
 
-			filterChain, err := t.translateListenerToFilterChain(gateway, listener, routeConfig)
+			filterChain, err := t.translateListenerToFilterChain(gateway, listener, routeConfig, allProcessorsForListener)
 			if err != nil {
 				meta.SetStatusCondition(&listenerStatus.Conditions, metav1.Condition{
 					Type:               string(gatewayv1.ListenerConditionProgrammed),
