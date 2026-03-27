@@ -92,7 +92,7 @@ ingress use case.
 
 ### Reverse-Proxy Egress Model
 
-This proposal focuses on a reverse-proxy egress model, where destinations are explicitly configured. It aims to define:
+This proposal focuses on an L7 explicit proxy egress model, where destinations are explicitly configured and workloads must directly route traffic through the Gateway. It aims to define:
 
 1. Resource model using Gateway + HTTPRoute with an additional resource (e.g. `Backend`) for destinations (Service or FQDN).
 2. Two routing modes: Endpoint (direct) and Parent (gateway chaining).
