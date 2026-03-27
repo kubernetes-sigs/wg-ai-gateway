@@ -117,18 +117,53 @@ Forward-proxy egress (dynamic routing to arbitrary external hostnames), network-
 
 ### Gateway Resource
 
-**Preferred Approach: Reuse Gateway API Gateway**
+The following resource models are being considered. Both models flip the semantics of `Gateway` for the consumer perspective:
+
+- **Listeners**: Describe how cluster workloads connect to the Gateway (inbound from cluster, outbound to backend)
+- **Addresses**: Internal address pool for workloads to reach the Gateway, not external-facing IPs
+- **Hostname mapping**: Workload target hostname may differ from backend hostname, requiring SNI and Host header alignment
+
+Both models require a `Backend` resource to represent external destinations.
+
+#### Reuse Gateway API Gateway
+
+Pros:
+
 - Leverage existing `Gateway`, `HTTPRoute`, and `GRPCRoute` resources
 - HTTPRoute references to external backends make it an egress gateway
-- Requires Backend resource to represent external destinations
+- No new gateway CRD to register or manage; existing ecosystem tooling works out of the box
 
-**Alternative Considered: New EgressGateway Resource**
-- Introduce dedicated `EgressGateway` resource type
-- Enables egress-specific fields (e.g., global CIDR allow-lists) without policy attachment overhead
-- Clearer separation of ingress vs egress concerns
+Cons:
 
-**Cons**
-- Implies defining equivalents of parentRefs, listeners, and route attachment.
+- Overloads ingress-oriented semantics (listeners, addresses) for a fundamentally different traffic direction, which may confuse users and documentation
+- Egress-specific fields (e.g., global CIDR allow-lists, default TLS posture) must be expressed through policy attachment, adding indirection
+- API evolution for egress is coupled to ingress Gateway; changes risk unintended impact on ingress use cases
+
+#### New EgressGateway Resource
+
+A dedicated `EgressGateway` resource initially reuses structs and implementation from `Gateway`, mitigating the cost of defining equivalents of parentRefs, listeners, and route attachment.
+
+Pros:
+
+- Egress-specific fields (e.g., global CIDR allow-lists, default TLS posture) without policy attachment overhead
+- Clear separation of ingress vs egress concerns
+- Future API evolution without impacting ingress Gateways
+
+Cons:
+
+- New CRD that ecosystem tooling (dashboards, kubectl plugins, policy engines) will not recognize out of the box
+- Users and documentation must learn and maintain a separate resource, even though its shape is largely identical to `Gateway`
+- Risk of divergence from upstream `Gateway` structs over time, increasing long-term maintenance burden
+
+#### Open Questions
+
+1. **Mixed-mode Gateways**: If reusing `Gateway`, should a single instance be permitted to serve both ingress and egress traffic? If yes, how are listeners distinguished by direction -- an explicit field, or inferred from the presence of external `Backend` refs? If no, how is single-direction usage enforced -- via `GatewayClass`, validation webhook, or convention?
+
+2. **GatewayClass semantics**: Should egress require a dedicated `GatewayClass` to signal intent (e.g., `gatewayClassName: egress-proxy`), regardless of which resource model is chosen? A dedicated class gives implementations a clear signal for provisioning and status reporting, but may conflict with mixed-mode use cases.
+
+3. **Gateway-level policy scoping**: The current precedence model (Route > Backend > Gateway) treats gateway-level policy as the broadest scope. If a single `Gateway` serves both ingress and egress, can gateway-level policy (e.g., a global CIDR deny-list) be scoped to only egress routes? If not, operators may be forced to deploy separate `Gateway` instances to avoid policy bleed between traffic directions, reducing the practical benefit of reuse.
+
+4. **Non-overridable policy**: GEP-713 Inherited Policy Attachment already provides an `overrides` stanza (Experimental) where less-specific policy wins -- a gateway-level override cannot be relaxed by a route-level policy. Is this sufficient for egress invariants (e.g., "all egress traffic must use TLS", global CIDR deny-lists), or are these better expressed as first-class fields on a dedicated resource? If relying on `overrides`, does the Experimental status present a maturity concern for egress use cases that require strong enforcement guarantees?
 
 This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude mesh-based egress models in future work.
 
