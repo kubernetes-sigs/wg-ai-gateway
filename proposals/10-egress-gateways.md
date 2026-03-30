@@ -117,7 +117,9 @@ Forward-proxy egress (dynamic routing to arbitrary external hostnames), network-
 
 ### Gateway Resource
 
-The following resource models are being considered. Both models flip the semantics of `Gateway` for the consumer perspective:
+The following resource models are being considered. Throughout this proposal, `Gateway` is used generically to refer to whichever gateway resource is ultimately chosen; the resource model decision is scoped to this section.
+
+Both models flip the semantics of `Gateway` for the consumer perspective:
 
 - **Listeners**: Describe how cluster workloads connect to the Gateway (inbound from cluster, outbound to backend)
 - **Addresses**: Internal address pool for workloads to reach the Gateway, not external-facing IPs
@@ -165,7 +167,7 @@ Cons:
 
 4. **Non-overridable policy**: GEP-713 Inherited Policy Attachment already provides an `overrides` stanza (Experimental) where less-specific policy wins -- a gateway-level override cannot be relaxed by a route-level policy. Is this sufficient for egress invariants (e.g., "all egress traffic must use TLS", global CIDR deny-lists), or are these better expressed as first-class fields on a dedicated resource? If relying on `overrides`, does the Experimental status present a maturity concern for egress use cases that require strong enforcement guarantees?
 
-This proposal focuses on the `Gateway`, `Route` and `Backend` model for egress, but MUST NOT preclude mesh-based egress models in future work.
+Regardless of resource model, this proposal MUST NOT preclude mesh-based egress models in future work.
 
 ### Backend Resource and Policy Application
 
