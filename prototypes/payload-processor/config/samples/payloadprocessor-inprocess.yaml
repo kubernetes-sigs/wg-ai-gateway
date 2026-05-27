@@ -1,0 +1,21 @@
+# POC: PayloadProcessor — extracts model from body, sets as header (PreRouting)
+apiVersion: ainetworking.x-k8s.io/v0alpha0
+kind: PayloadProcessor
+metadata:
+  name: model-header-setter
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai-gateway
+  phase: PreRouting
+  processors:
+  - name: extract-model
+    type: InProcess
+    failureMode: FailClosed
+    inProcess:
+      request:
+        set:
+        - name: X-Gateway-Model-Name
+          value: 'json(request.body).model'

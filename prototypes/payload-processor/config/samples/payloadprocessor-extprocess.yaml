@@ -1,3 +1,26 @@
+# POC: PayloadProcessor — extracts model from body, sets as header (PreRouting)
+apiVersion: ainetworking.x-k8s.io/v0alpha0
+kind: PayloadProcessor
+metadata:
+  name: extproc-model-header-setter
+  namespace: default
+spec:
+  targetRef:
+    group: gateway.networking.k8s.io
+    kind: Gateway
+    name: ai-gateway
+  phase: PreRouting
+  processors:
+  - name: extract-model
+    type: ExtProcess
+    failureMode: FailClosed
+    extProcess:
+      backendRef:
+        name: ext-process-bbr
+        port: 4444
+        kind: Service
+
+---
 # POC: ExtProcess server that extracts model from body and sets X-Gateway-Model-Name header
 apiVersion: apps/v1
 kind: Deployment
@@ -16,7 +39,7 @@ spec:
     spec:
       containers:
       - name: ext-process-bbr
-        image: ext-process-bbr:latest
+        image: localhost:5000/ext-proc-server:latest
         imagePullPolicy: IfNotPresent
         args: ["--port", "18080"]
         ports:
@@ -26,6 +49,7 @@ spec:
           requests:
             cpu: 10m
             memory: 32Mi
+
 ---
 apiVersion: v1
 kind: Service

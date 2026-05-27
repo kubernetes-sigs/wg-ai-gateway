@@ -14,21 +14,10 @@ import (
 // +k8s:deepcopy-gen=false
 type CELExpression string
 
-// LocalPolicyTargetReference selects the object to attach the policy by
-// Group, Kind, and Name. The object must be in the same namespace as the policy.
-type LocalPolicyTargetReference struct {
-	// +required
-	Group gwv1.Group `json:"group"`
-	// +required
-	Kind gwv1.Kind `json:"kind"`
-	// +required
-	Name gwv1.ObjectName `json:"name"`
-}
-
 // LocalPolicyTargetReferenceWithSectionName extends LocalPolicyTargetReference
 // with an optional SectionName field.
 type LocalPolicyTargetReferenceWithSectionName struct {
-	LocalPolicyTargetReference `json:",inline"`
+	gwv1.LocalPolicyTargetReference `json:",inline"`
 	// +optional
 	SectionName *gwv1.SectionName `json:"sectionName,omitempty"`
 }
@@ -113,7 +102,7 @@ type ProcessorEntry struct {
 	// InProcess runs CEL expressions directly in the gateway.
 	// ExtProc calls an external gRPC service (not yet implemented).
 	// +required
-	// +kubebuilder:validation:Enum=InProcess;ExtProc
+	// +kubebuilder:validation:Enum=InProcess;ExtProccess
 	Type ProcessorType `json:"type"`
 
 	// failureMode determines what happens if this processor fails.
@@ -134,18 +123,18 @@ type ProcessorEntry struct {
 	// +optional
 	InProcess *InProcessConfig `json:"inProcess,omitempty"`
 
-	// extProc configures external processor communication.
-	// Required when type is ExtProc. Not yet implemented.
+	// extProcess configures external processor communication.
+	// Required when type is ExtProcess. Not yet implemented.
 	// +optional
-	ExtProc *ExtProcConfig `json:"extProc,omitempty"`
+	ExtProcess *ExtProcessConfig `json:"extProcess,omitempty"`
 }
 
-// +kubebuilder:validation:Enum=InProcess;ExtProc
+// +kubebuilder:validation:Enum=InProcess;ExtProcess
 type ProcessorType string
 
 const (
-	ProcessorTypeInProcess ProcessorType = "InProcess"
-	ProcessorTypeExtProc   ProcessorType = "ExtProc"
+	ProcessorTypeInProcess  ProcessorType = "InProcess"
+	ProcessorTypeExtProcess ProcessorType = "ExtProcess"
 )
 
 // +kubebuilder:validation:Enum=FailClosed;FailOpen
@@ -158,10 +147,16 @@ const (
 
 // InProcessConfig configures payload processing that runs directly
 // in the gateway process using CEL expressions.
+//
+// +kubebuilder:validation:AtLeastOneFieldSet
 type InProcessConfig struct {
 	// request defines how to process the request payload.
-	// +required
+	// +optional
 	Request InProcessTransform `json:"request"`
+
+	// response defines how to process the response payload.
+	// +optional
+	Response InProcessTransform `json:"response"`
 }
 
 // InProcessTransform defines header mutations using CEL expressions.
@@ -219,9 +214,9 @@ type HeaderTransformation struct {
 	Value CELExpression `json:"value"`
 }
 
-// ExtProcConfig configures communication with an external processor.
+// ExtProcessConfig configures communication with an external processor.
 // This is defined for future extensibility and is not yet implemented.
-type ExtProcConfig struct {
+type ExtProcessConfig struct {
 	// backendRef references the external processor service.
 	// +required
 	BackendRef gwv1.BackendObjectReference `json:"backendRef"`

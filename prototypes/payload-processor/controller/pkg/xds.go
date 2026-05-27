@@ -21,6 +21,13 @@ import (
 // TypeURL matches what the agentgateway data plane subscribes to.
 const ResourceTypeURL = "type.googleapis.com/agentgateway.dev.resource.Resource"
 
+// clientState tracks per-client xDS state for computing resource removals.
+type clientState struct {
+	notify        chan struct{}
+	sentResources map[string]bool // previously sent ADP resource names
+	sentAddresses map[string]bool // previously sent address names
+}
+
 // XDSServer serves agentgateway-compatible xDS resources to connected data planes.
 type XDSServer struct {
 	discovery.UnimplementedAggregatedDiscoveryServiceServer
@@ -29,7 +36,7 @@ type XDSServer struct {
 	resources   map[string]*discovery.Resource // scoped name -> resource (ADP_TYPE)
 	addresses   map[string]*discovery.Resource // key -> address resource (ADDRESS_TYPE)
 	version     uint64
-	connections map[string]chan struct{}
+	connections map[string]*clientState
 
 	grpcServer *grpc.Server
 }
@@ -39,7 +46,7 @@ func NewXDSServer() *XDSServer {
 	s := &XDSServer{
 		resources:   make(map[string]*discovery.Resource),
 		addresses:   make(map[string]*discovery.Resource),
-		connections: make(map[string]chan struct{}),
+		connections: make(map[string]*clientState),
 	}
 	s.grpcServer = grpc.NewServer()
 	discovery.RegisterAggregatedDiscoveryServiceServer(s.grpcServer, s)
@@ -75,9 +82,9 @@ func (s *XDSServer) UpdateResources(resources []GatewayResource) {
 	s.resources = newResources
 
 	// Notify all connected clients
-	for id, ch := range s.connections {
+	for id, cs := range s.connections {
 		select {
-		case ch <- struct{}{}:
+		case cs.notify <- struct{}{}:
 			slog.Debug("notified xDS client", "id", id)
 		default:
 		}
@@ -103,9 +110,9 @@ func (s *XDSServer) UpdateAddresses(addrs []AddressResource) {
 
 	s.addresses = newAddresses
 
-	for _, ch := range s.connections {
+	for _, cs := range s.connections {
 		select {
-		case ch <- struct{}{}:
+		case cs.notify <- struct{}{}:
 		default:
 		}
 	}
@@ -125,9 +132,13 @@ func (s *XDSServer) DeltaAggregatedResources(stream discovery.AggregatedDiscover
 	}
 	slog.Info("xDS client connected", "id", clientID, "type", req.TypeUrl)
 
-	notify := make(chan struct{}, 1)
+	client := &clientState{
+		notify:        make(chan struct{}, 1),
+		sentResources: make(map[string]bool),
+		sentAddresses: make(map[string]bool),
+	}
 	s.mu.Lock()
-	s.connections[clientID] = notify
+	s.connections[clientID] = client
 	s.mu.Unlock()
 	defer func() {
 		s.mu.Lock()
@@ -137,7 +148,7 @@ func (s *XDSServer) DeltaAggregatedResources(stream discovery.AggregatedDiscover
 	}()
 
 	// Send initial snapshot
-	if err := s.sendSnapshot(stream); err != nil {
+	if err := s.sendSnapshot(stream, client); err != nil {
 		return err
 	}
 
@@ -146,15 +157,35 @@ func (s *XDSServer) DeltaAggregatedResources(stream discovery.AggregatedDiscover
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-notify:
-			if err := s.sendSnapshot(stream); err != nil {
+		case <-client.notify:
+			if err := s.sendSnapshot(stream, client); err != nil {
 				return err
 			}
 		}
 	}
 }
 
-func (s *XDSServer) sendSnapshot(stream discovery.AggregatedDiscoveryService_DeltaAggregatedResourcesServer) error {
+// removedNames returns names present in prev but absent from current.
+func removedNames(prev map[string]bool, current map[string]*discovery.Resource) []string {
+	var removed []string
+	for name := range prev {
+		if _, exists := current[name]; !exists {
+			removed = append(removed, name)
+		}
+	}
+	return removed
+}
+
+// trackNames returns a new set of all keys in the resource map.
+func trackNames(resources map[string]*discovery.Resource) map[string]bool {
+	names := make(map[string]bool, len(resources))
+	for name := range resources {
+		names[name] = true
+	}
+	return names
+}
+
+func (s *XDSServer) sendSnapshot(stream discovery.AggregatedDiscoveryService_DeltaAggregatedResourcesServer, client *clientState) error {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -163,24 +194,33 @@ func (s *XDSServer) sendSnapshot(stream discovery.AggregatedDiscoveryService_Del
 	for _, r := range s.addresses {
 		addressResources = append(addressResources, r)
 	}
-	if len(addressResources) > 0 {
+	removedAddresses := removedNames(client.sentAddresses, s.addresses)
+	if len(addressResources) > 0 || len(removedAddresses) > 0 {
 		if err := stream.Send(&discovery.DeltaDiscoveryResponse{
-			TypeUrl:   AddressTypeURL,
-			Resources: addressResources,
+			TypeUrl:          AddressTypeURL,
+			Resources:        addressResources,
+			RemovedResources: removedAddresses,
 		}); err != nil {
 			return err
 		}
 	}
+	client.sentAddresses = trackNames(s.addresses)
 
 	// Send ADP resources (binds, listeners, routes, policies)
 	var adpResources []*discovery.Resource
 	for _, r := range s.resources {
 		adpResources = append(adpResources, r)
 	}
-	return stream.Send(&discovery.DeltaDiscoveryResponse{
-		TypeUrl:   ResourceTypeURL,
-		Resources: adpResources,
+	removedResources := removedNames(client.sentResources, s.resources)
+	err := stream.Send(&discovery.DeltaDiscoveryResponse{
+		TypeUrl:          ResourceTypeURL,
+		Resources:        adpResources,
+		RemovedResources: removedResources,
 	})
+	if err == nil {
+		client.sentResources = trackNames(s.resources)
+	}
+	return err
 }
 
 // Serve starts the xDS gRPC server on the given listener.

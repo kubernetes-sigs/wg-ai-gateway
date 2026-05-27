@@ -95,9 +95,9 @@ func (in *ProcessorEntry) DeepCopyInto(out *ProcessorEntry) {
 		*out = new(InProcessConfig)
 		(*in).DeepCopyInto(*out)
 	}
-	if in.ExtProc != nil {
-		in, out := &in.ExtProc, &out.ExtProc
-		*out = new(ExtProcConfig)
+	if in.ExtProcess != nil {
+		in, out := &in.ExtProcess, &out.ExtProcess
+		*out = new(ExtProcessConfig)
 		(*in).DeepCopyInto(*out)
 	}
 }
@@ -114,6 +114,7 @@ func (in *ProcessorEntry) DeepCopy() *ProcessorEntry {
 func (in *InProcessConfig) DeepCopyInto(out *InProcessConfig) {
 	*out = *in
 	in.Request.DeepCopyInto(&out.Request)
+	in.Response.DeepCopyInto(&out.Response)
 }
 
 func (in *InProcessConfig) DeepCopy() *InProcessConfig {
@@ -162,24 +163,18 @@ func (in *HeaderTransformation) DeepCopy() *HeaderTransformation {
 	return out
 }
 
-func (in *ExtProcConfig) DeepCopyInto(out *ExtProcConfig) {
+func (in *ExtProcessConfig) DeepCopyInto(out *ExtProcessConfig) {
 	*out = *in
 	in.BackendRef.DeepCopyInto(&out.BackendRef)
 }
 
-func (in *ExtProcConfig) DeepCopy() *ExtProcConfig {
+func (in *ExtProcessConfig) DeepCopy() *ExtProcessConfig {
 	if in == nil {
 		return nil
 	}
-	out := new(ExtProcConfig)
+	out := new(ExtProcessConfig)
 	in.DeepCopyInto(out)
 	return out
-}
-
-// DeepCopyInto for inlined shared types
-
-func (in *LocalPolicyTargetReference) DeepCopyInto(out *LocalPolicyTargetReference) {
-	*out = *in
 }
 
 func (in *LocalPolicyTargetReferenceWithSectionName) DeepCopyInto(out *LocalPolicyTargetReferenceWithSectionName) {

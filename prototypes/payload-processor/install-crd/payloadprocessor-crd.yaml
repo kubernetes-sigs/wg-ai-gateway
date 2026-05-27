@@ -65,7 +65,7 @@ spec:
                       maxLength: 63
                     type:
                       type: string
-                      enum: ["InProcess", "ExtProc"]
+                      enum: ["InProcess", "ExtProcess"]
                     failureMode:
                       type: string
                       enum: ["FailClosed", "FailOpen"]
@@ -74,7 +74,9 @@ spec:
                       type: string
                     inProcess:
                       type: object
-                      required: ["request"]
+                      anyOf:
+                      - required: ["request"]
+                      - required: ["response"]
                       properties:
                         request:
                           type: object
@@ -110,7 +112,41 @@ spec:
                               maxItems: 16
                               items:
                                 type: string
-                    extProc:
+                        response:
+                          type: object
+                          properties:
+                            set:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name", "value"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 256
+                                  value:
+                                    type: string
+                            add:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name", "value"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 256
+                                  value:
+                                    type: string
+                            remove:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: string
+                    extProcess:
                       type: object
                       required: ["backendRef"]
                       properties:

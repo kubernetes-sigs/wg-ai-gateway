@@ -59,6 +59,12 @@ docker-build-local: ## Build and push docker image to local registry
 	docker build -t localhost:5000/payload-processor-controller:latest -f controller/Dockerfile $(PROTOTYPE_ROOT)
 	docker push localhost:5000/payload-processor-controller:latest
 
+.PHONY: ext-proc-build-local
+ext-proc-build-local: ## Build and push ext-proc-server image to local registry
+	@echo "Building and pushing ext-proc-server to local registry..."
+	docker build -t localhost:5000/ext-proc-server:latest ext-proc-server/
+	docker push localhost:5000/ext-proc-server:latest
+
 ##@ Development Environment
 
 .PHONY: dev-setup

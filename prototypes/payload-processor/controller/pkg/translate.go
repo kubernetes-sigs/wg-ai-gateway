@@ -86,8 +86,8 @@ func translatePayloadProcessorPolicies(
 
 	for i, proc := range pp.Spec.Processors {
 		switch proc.Type {
-		case v0alpha0.ProcessorTypeExtProc:
-			policy, err := translateExtProcProcessor(proc, i, basePolicyName, policyName, pp.Spec.Phase, resolveBackend, pp.Namespace)
+		case v0alpha0.ProcessorTypeExtProcess:
+			policy, err := translateExtProcessProcessor(proc, i, basePolicyName, policyName, pp.Spec.Phase, resolveBackend, pp.Namespace)
 			if err != nil {
 				errs = append(errs, err)
 				continue
@@ -114,7 +114,7 @@ func translatePayloadProcessorPolicies(
 	return policies, errors.Join(errs...)
 }
 
-func translateExtProcProcessor(
+func translateExtProcessProcessor(
 	proc v0alpha0.ProcessorEntry,
 	index int,
 	basePolicyName string,
@@ -123,13 +123,13 @@ func translateExtProcProcessor(
 	resolveBackend BackendResolver,
 	namespace string,
 ) (*api.Policy, error) {
-	if proc.ExtProc == nil {
-		return nil, fmt.Errorf("processor %q: ExtProc config required for ExtProc type", proc.Name)
+	if proc.ExtProcess == nil {
+		return nil, fmt.Errorf("processor %q: ExtProcess config required for ExtProcess type", proc.Name)
 	}
 
-	be, err := resolveBackend(proc.ExtProc.BackendRef, namespace)
+	be, err := resolveBackend(proc.ExtProcess.BackendRef, namespace)
 	if err != nil {
-		return nil, fmt.Errorf("processor %q: failed to resolve extProc backendRef: %w", proc.Name, err)
+		return nil, fmt.Errorf("processor %q: failed to resolve extProcess backendRef: %w", proc.Name, err)
 	}
 
 	failureMode := api.TrafficPolicySpec_ExtProc_FAIL_CLOSED
@@ -138,7 +138,7 @@ func translateExtProcProcessor(
 	}
 
 	return &api.Policy{
-		Key:  fmt.Sprintf("%s:%s[%d]:extproc", basePolicyName, proc.Name, index),
+		Key:  fmt.Sprintf("%s:%s[%d]:extprocess", basePolicyName, proc.Name, index),
 		Name: typedResourceName("PayloadProcessor", policyName),
 		Kind: &api.Policy_Traffic{
 			Traffic: &api.TrafficPolicySpec{
@@ -165,29 +165,31 @@ func translateInProcessProcessor(
 		return nil, fmt.Errorf("processor %q: InProcess config required for InProcess type", proc.Name)
 	}
 
-	converted := convertTransform(&proc.InProcess.Request)
-	if converted == nil {
-		return nil, nil
-	}
-
-	return &api.Policy{
-		Key:  fmt.Sprintf("%s:%s[%d]:payload-processor", basePolicyName, proc.Name, index),
-		Name: typedResourceName("PayloadProcessor", policyName),
-		Kind: &api.Policy_Traffic{
-			Traffic: &api.TrafficPolicySpec{
-				Phase: mapPhase(phase),
-				Kind: &api.TrafficPolicySpec_Transformation{
-					Transformation: &api.TrafficPolicySpec_TransformationPolicy{
-						Request: converted,
+	convertedReq := convertTransform(&proc.InProcess.Request)
+	convertedResp := convertTransform(&proc.InProcess.Response)
+	if convertedReq != nil || convertedResp != nil {
+		return &api.Policy{
+			Key:  fmt.Sprintf("%s:%s[%d]:payload-processor", basePolicyName, proc.Name, index),
+			Name: typedResourceName("PayloadProcessor", policyName),
+			Kind: &api.Policy_Traffic{
+				Traffic: &api.TrafficPolicySpec{
+					Phase: mapPhase(phase),
+					Kind: &api.TrafficPolicySpec_Transformation{
+						Transformation: &api.TrafficPolicySpec_TransformationPolicy{
+							Request:  convertedReq,
+							Response: convertedResp},
 					},
 				},
 			},
-		},
-	}, nil
+		}, nil
+	}
+
+	return nil, errors.New("request or response was not specified or was invalid")
 }
 
 // convertTransform converts InProcessTransform to the agentgateway API format.
 // Adapted from agentgateway's convertTransformSpec.
+// TODO(jaellio): validate CEL
 func convertTransform(in *v0alpha0.InProcessTransform) *api.TrafficPolicySpec_TransformationPolicy_Transform {
 	if in == nil {
 		return nil
