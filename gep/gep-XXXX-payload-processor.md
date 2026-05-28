@@ -24,13 +24,11 @@ reject if PII detected."
 
 While the API surface supports both InProcess and ExtProc processor types, this
 GEP's initial scope is limited to InProcess header mutation from request body
-content, which has been validated by a [proof-of-concept implementation] in the
-[agentgateway] project. The ExtProc processing protocol standardization is
-deferred to a follow-on GEP.
+content, which has been validated by a [proof-of-concept implementation].
+The ExtProc processing protocol standardization is deferred to a follow-on GEP.
 
 [GEP-713]: https://gateway-api.sigs.k8s.io/geps/gep-713/
-[proof-of-concept implementation]: https://github.com/agentgateway/agentgateway/tree/main/payload-processor-poc
-[agentgateway]: https://github.com/agentgateway/agentgateway
+[proof-of-concept implementation]: https://github.com/kubernetes-sigs/wg-ai-gateway/pull/56
 
 ## Motivation
 
@@ -54,10 +52,11 @@ implementation-specific extensions with no portability.
 AI inference workloads send model selection, prompt content, and configuration
 in the request body (typically JSON). Key decisions — which model to route to,
 whether the prompt contains PII or injection attacks, whether to cache the
-response — all require reading the body. Today, the [Gateway API Inference
-Extension (GIE)] implements a proprietary Body-Based Router (BBR) to extract
-model names for routing. This functionality is tightly coupled to GIE and not
-reusable for other body-processing use cases.
+response — all require reading the body. Today, the llm-d has an implemention of
+a Body-Based Router (BBR) to extract model names for routing. This is the primary
+implementation of the pluggable BBR framework proposed by [Gateway API Inference Extension (GAIE)].
+This proposal is in a draft state and the reference implemenation in no longer within
+the GAIE repo.
 
 ### External Processing Varies Per Proxy
 
@@ -74,7 +73,9 @@ example, "first extract the model name for routing, then scan for PII, then
 check for prompt injection." Current approaches require either monolithic
 external services or implementation-specific chaining mechanisms.
 
-[Gateway API Inference Extension (GIE)]: https://github.com/kubernetes-sigs/gateway-api-inference-extension
+[Gateway API Inference Extension (GAIE)]: https://github.com/kubernetes-sigs/gateway-api-inference-extension
+[BBR framework Proposed]: https://github.com/kubernetes-sigs/gateway-api-inference-extension/tree/main/docs/proposals/1964-pluggable-bbr-framework
+[llm-d]: https://github.com/llm-d/llm-d-inference-payload-processor
 
 ## Goals
 
@@ -84,7 +85,7 @@ external services or implementation-specific chaining mechanisms.
 * Support **InProcess** processors that use CEL expressions to extract data from
   request bodies and mutate headers, enabling body-based routing without
   external services.
-* Support **ExtProc** processors that delegate payload processing to external
+* Support **ExtProcess** processors that delegate payload processing to external
   gRPC services referenced via `backendRef`, enabling arbitrary processing
   logic (security scanning, PII detection, semantic analysis).
 * Provide per-processor **failure modes** (`FailClosed`, `FailOpen`) to enable
@@ -110,14 +111,20 @@ external services or implementation-specific chaining mechanisms.
 * **Streaming body processing**: This GEP requires full body buffering for
   InProcess processors. Streaming/chunked body processing is deferred to
   future work.
-* **Response body mutation**: The initial scope covers request-side processing
-  (header mutation from request body). Response body inspection and mutation
-  are future extensions enabled by the `PostRouting` phase but not specified in
-  detail here.
-* **Replacing GIE's Body-Based Router**: While the PayloadProcessor can
-  implement the same body-based routing pattern, this GEP does not propose
-  deprecating or replacing GIE's BBR. Integration with GIE is discussed as
-  future work.
+* **External processing distinction between request and response**: Specifying when
+  or how external processing is invoked is out of scope for this GEP and is
+  dependent upon a standardized ExtProc protocol. Pre and post-routing phases are
+  defined, but the API does not currently distinguish between request and response
+  processing for ExtProc. [agentgateway's implementation] can be referenced as prior
+  art.
+* **Develop a CEL standard library**: While CEL is the recommended expression language for InProcess processors, the
+  development of a standard library of CEL functions for common payload processing
+  tasks (JSON parsing, string manipulation, semantic similarity) is deferred to
+  future work. However, for the payload processor resource to be portable and have
+  consistent behavior across implementations, CEL standardization is a critical
+  dependency that must be addressed in parallel.
+
+[agentgateway's implementation]: https://github.com/agentgateway/agentgateway/pull/1787
 
 ## User Stories
 
@@ -125,8 +132,9 @@ external services or implementation-specific chaining mechanisms.
 
 > "I want to route inference requests to the correct model backend based on the
 > `model` field in the JSON request body, without modifying my application or
-> using implementation-specific extensions. Today I have to use GIE's
-> Body-Based Router, but I want a portable Gateway API solution."
+> using implementation-specific extensions. Today I use a custom
+> Body-Based Router API and implementation, but I want a portable Gateway API
+> solution."
 
 ### As a Security Engineer
 
@@ -312,6 +320,8 @@ mechanism for body-based routing and lightweight request transformation.
 
 **CEL Context Available:**
 
+TODO: Define a CEL standard library for payload processing with functions like `json()`, `form.decode()`, and `merge()`.
+
 | Variable | Type | Description |
 |----------|------|-------------|
 | `request.body` | `bytes` | Raw request body (triggers automatic buffering) |
@@ -378,13 +388,13 @@ spec:
       port: 8080
 ```
 
-### ExtProc Processors
+### ExtProcess Processors
 
-ExtProc processors delegate payload processing to an external service
+ExtProcess processors delegate payload processing to an external service
 referenced via `backendRef`. The external service receives the request payload
 and can signal approval, rejection, or header/body mutations.
 
-**Note:** The wire protocol between the gateway and the ExtProc service is
+**Note:** The wire protocol between the gateway and the ExtProcess service is
 **not standardized by this GEP**. Implementations MAY use Envoy's ext_proc
 gRPC protocol, a custom protocol, or any other mechanism. A follow-on GEP will
 propose a standardized processing protocol.
@@ -392,17 +402,17 @@ propose a standardized processing protocol.
 ```yaml
 processors:
 - name: pii-scanner
-  type: ExtProc
+  type: ExtProcess
   failureMode: FailClosed
   timeout: "1s"
-  extProc:
+  extProcess:
     backendRef:
       kind: Service
       name: pii-scanner-service
       port: 4444
 ```
 
-**ExtProc Service Requirements:**
+**ExtProcess Service Requirements:**
 * The service MUST be reachable from the gateway data plane.
 * Implementations MUST support referencing Kubernetes `Service` resources.
 * Implementations MAY support other backend kinds (e.g., `Backend` from
@@ -426,8 +436,8 @@ over behavior when processing fails:
 Failure modes apply to:
 * CEL expression evaluation errors (InProcess)
 * Body buffering failures (body too large, malformed)
-* External service timeouts or connection failures (ExtProc)
-* External service returning an error response (ExtProc)
+* External service timeouts or connection failures (ExtProcess)
+* External service returning an error response (ExtProcess)
 
 ### Ordering and Execution Semantics
 
@@ -461,7 +471,7 @@ The `PayloadProcessor` CRD uses Kubernetes-native validation mechanisms:
 * **Schema validation**: Field types, enums, string lengths, array bounds
   (1-16 processors, 1-63 char names, 1-256 char header names)
 * **CEL validation rules** (`x-kubernetes-validations`):
-  * Exactly one of `inProcess` or `extProc` MUST be set per processor
+  * Exactly one of `inProcess` or `extProcess` MUST be set per processor
     (enforced by: `has(self.inProcess) != has(self.extProc)`)
   * `targetRef.kind` MUST be `Gateway` or `ListenerSet` when `phase` is
     `PreRouting`
@@ -509,14 +519,14 @@ and Extended features:
 
 ## Relationship to Existing Concepts
 
-### Gateway API Inference Extension (GIE) Body-Based Router
+### Gateway API Inference Extension (GAIE) Body-Based Router
 
-GIE implements a Body-Based Router (BBR) that extracts the model name from
+GAIE implements a Body-Based Router (BBR) that extracts the model name from
 inference request bodies to select the appropriate `InferencePool`. The
 `PayloadProcessor` InProcess type can implement the same pattern in a
 portable, reusable way:
 
-* **BBR**: Implementation-specific, tightly coupled to GIE's model routing
+* **BBR**: Implementation-specific, tightly coupled to GAIE's model routing
 * **PayloadProcessor**: Generic, reusable for any body field extraction and
   header-based routing
 
@@ -527,7 +537,7 @@ complexity. However, this GEP does not propose deprecating or replacing BBR.
 ### Envoy ext_proc
 
 Envoy's [External Processing filter] provides a mature, streaming-capable
-protocol for external payload processing. PayloadProcessor's ExtProc type is
+protocol for external payload processing. PayloadProcessor's ExtProcess type is
 conceptually similar but does not mandate the Envoy ext_proc wire protocol.
 Implementations using Envoy MAY map ExtProc processors directly to Envoy
 ext_proc filters. The standardization of a common wire protocol is deferred.
@@ -574,7 +584,7 @@ are additional criteria specific to this GEP:
 * Reference implementation in at least one Gateway API implementation
   (agentgateway POC serves as initial validation)
 * Basic conformance tests for InProcess header mutation from body
-* At least one ExtProc implementation demonstrating external processing
+* At least one ExtProcess implementation demonstrating external processing
 
 ### Standard
 
@@ -614,6 +624,8 @@ is a significant design decision. We evaluated several alternatives:
 * **Complexity cost**: Large documents or deeply nested expressions may exceed
   Kubernetes CEL cost budgets
 * **Binary data**: Non-UTF-8 binary payloads require base64 encoding/decoding
+* **Standardization**: No enforcement of a consistent CEL standard library
+  across implementations may lead to portability issues
 
 #### JSONPath / JMESPath
 
@@ -759,6 +771,12 @@ The POC uses a gateway-wide default (2 MiB). Per-processor configuration
 adds flexibility but also complexity. The initial proposal defers this to
 implementation-defined configuration.
 
+### ExtProc Buffering
+
+> Are we okay with buffering being the only supported mode for extProc?
+
+https://github.com/kubernetes-sigs/wg-ai-gateway/pull/56/changes/BASE..3cb22badd015dd720f300855f5cdcd290d06b0a9#r3306621885
+
 ## Proof of Concept
 
 The [agentgateway PayloadProcessor POC] validates the core design:
@@ -767,9 +785,12 @@ The [agentgateway PayloadProcessor POC] validates the core design:
   InProcess and ExtProc schema
 * **Implementation**: Go controller plugin translates `InProcess` processors
   to standard `TrafficPolicySpec_Transformation` policies; Rust data plane
-  processes them with automatic body buffering — no data plane changes required
+  processes them with automatic body buffering — no data plane changes required.
+  The controller also translates `ExtProcess` processors to policies which the
+  data plane translates to Envoy `ext_proc` calls to the specified backendRef.
 * **Demo**: Body-based routing with three backends (gpt-4, claude, default)
-  using `json(request.body).model` CEL expression to extract model name and
+  using `json(request.body).model` CEL expression (for `InProcess`) or an external
+  server (for `ExtProcess`) to extract model name and
   set `X-Gateway-Model-Name` header for HTTPRoute matching
 
 ```
@@ -784,8 +805,7 @@ curl -X POST http://localhost:8080/v1/chat/completions \
   -d '{"model": "claude", "messages": [{"role": "user", "content": "hello"}]}'
 ```
 
-[agentgateway PayloadProcessor POC]: https://github.com/agentgateway/agentgateway/tree/main/payload-processor-poc
-
+[PayloadProcessor Prototype]: https://github.com/kubernetes-sigs/wg-ai-gateway/pull/56
 ## References
 
 * [WG AI Gateway Payload Processing Proposal](https://github.com/kubernetes-sigs/wg-ai-gateway/blob/main/proposals/7-payload-processing.md)
