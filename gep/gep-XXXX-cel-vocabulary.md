@@ -144,14 +144,10 @@ contains identifiers for both representations.
 | k8s.http.request.method              | string                      | Request method e.g. "GET" |
 | k8s.http.request.protocol            | string                      | "Request protocol ('"HTTP/1.0'", '"HTTP/1.1'", '"HTTP/2'", or '"HTTP/3'")" |
 | k8s.http.request.headers             | map<string | string >       | All request headers indexed by the header name, with concatenated values. |
-| k8s.http.request.raw_headers         | list< Header >              | All request headers as observed by the dataplane. The Header type is a (string, string) tuple. |
-| k8s.http.request.trailers            | map<string | string >       | All request trailers indexed by the header name, with concatenated values. |
-| k8s.http.request.raw_trailers        | list< Header >              | All request trailers as observed by the dataplane. The Header type is a (string, string) tuple. |
+| k8s.http.request.raw_headers         | list< Header >              | All request headers in the order observed by the dataplane. The Header is a message type with two string values `{name, value}`. |
 | k8s.http.response.status.code        | int                         | HTTP response status code. |
 | k8s.http.response.headers            | map<string | string >       | All response headers indexed by the header name, with concatenated values. |
-| k8s.http.response.raw_headers        | list< Header >              | All response headers as observed by the dataplane. The Header type is a (string, string) tuple. |
-| k8s.http.response.trailers           | map<string | string >       | All response trailers indexed by the header name, with concatenated values. |
-| k8s.http.response.raw_trailers       | list< Header >              | All response trailers as observed by the dataplane. The Header type is a message type with two string values `{name, value}`. |
+| k8s.http.response.raw_headers        | list< Header >              | All response headers in the order observed by the dataplane. The Header is a message type with two string values `{name, value}`. |
 
 ### MCP Vocabulary
 
