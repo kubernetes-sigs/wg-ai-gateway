@@ -83,16 +83,17 @@ specific attribute. Standard vocabulary defines the following protocol identifie
 | Identifier | Protocol(s) |
 |------------|-------------|
 | tcp        | TCP/IP |
-| TLS        | TLS (all versions) |
+| tls        | TLS (all versions) |
 | http       | HTTP (all versions) |
 | mcp        | MCP |
-| openai     | OpenAI |
+| llm        | Inference |
 
 The protocol identifier is followed by one or more identifiers that fully qualify the protocol attribute.
 
-Dataplane vendors may extend the standard dictionary by defining attribute names within vendor specific namespace.
+Dataplane vendors may extend the standard dictionary by defining attribute names outside of the reserved `k8s` namespace.
 In the absence of a registry that can be used to reserve vendor namespaces, each vendor MUST choose a namespace
-that does not collide with other vendors.
+that does not collide with other vendors. An error SHOULD be emitted by the API controller if a CEL expression uses
+unsupported attribute names.
 
 ### Attribute Semantics
 
@@ -117,22 +118,18 @@ contains identifiers for both representations.
 |--------------------------------------|--------|----------------------------------------------------------------------------------------------------------------------------------------------------------|
 | k8s.tcp.source.address               | string | Client connection remote IP address. IPv4 address is in the dot-decimal notation. IPv6 address is without square brackets and can be in compressed format. |
 | k8s.tcp.source.port                  | int    | Client connection remote port. |
-| k8s.tcp.source.is_tls                | bool   | Indicates whether TLS is applied to the client connection. |
-| k8s.tcp.source.is_mtls               | bool   | Indicates whether TLS is applied to the client connection and the peer certificate is presented. |
 
 ### TLS Vocabulary
 
 | Identifier                                    | Type   | Description
 |-----------------------------------------------|--------|------------------------------------------------------------------------------------------------|
+| k8s.tls.source.is_tls                         | bool   | Indicates whether TLS is applied to the client connection. If this value is false all other TLS attributes are empty values. |
+| k8s.tls.source.is_mtls                        | bool   | Indicates whether TLS is applied to the client connection and the peer certificate is presented. If this value is false all peer certificate values are empty. |
 | k8s.tls.source.requested_server_name          | string | Requested server name in the client TLS connection. |
 | k8s.tls.source.tls_version                    | string | TLS version of the client TLS connection. |
-| k8s.tls.source.subject_local_certificate      | string | The subject field of the local certificate in the client TLS connection. |
-| k8s.tls.source.subject_peer_certificate       | string | The subject field of the peer certificate in the client TLS connection. |
-| k8s.tls.source.dns_san_local_certificate      | string | The first DNS entry in the SAN field of the local certificate in the client TLS connection. |
-| k8s.tls.source.dns_san_peer_certificate       | string | The first DNS entry in the SAN field of the peer certificate in the client TLS connection. |
-| k8s.tls.source.uri_san_local_certificate      | string | The first URI entry in the SAN field of the local certificate in the client TLS connection. |
-| k8s.tls.source.uri_san_peer_certificate       | string | The first URI entry in the SAN field of the peer certificate in the client TLS connection. |
-| k8s.tls.source.sha256_peer_certificate_digest | string | SHA256 digest of the peer certificate in the client TLS connection if present. |
+| k8s.tls.source.subject_certificate            | string | The subject field of the peer certificate in the client TLS connection. |
+| k8s.tls.source.dns_san_certificate            | string | The first DNS entry in the SAN field of the peer certificate in the client TLS connection. |
+| k8s.tls.source.uri_san_certificate            | string | The first URI entry in the SAN field of the peer certificate in the client TLS connection. |
 | k8s.tls.source.peer_certificate               | string | PEM-encoded peer certificate in the client TLS connection if present. |
 
 ### HTTP Vocabulary
@@ -151,11 +148,10 @@ contains identifiers for both representations.
 | k8s.http.request.trailers            | map<string | string >       | All request trailers indexed by the header name, with concatenated values. |
 | k8s.http.request.raw_trailers        | list< Header >              | All request trailers as observed by the dataplane. The Header type is a (string, string) tuple. |
 | k8s.http.response.status.code        | int                         | HTTP response status code. |
-| k8s.http.response.status.details     | string                      | HTTP response status details. |
 | k8s.http.response.headers            | map<string | string >       | All response headers indexed by the header name, with concatenated values. |
 | k8s.http.response.raw_headers        | list< Header >              | All response headers as observed by the dataplane. The Header type is a (string, string) tuple. |
 | k8s.http.response.trailers           | map<string | string >       | All response trailers indexed by the header name, with concatenated values. |
-| k8s.http.response.raw_trailers       | list< Header >              | All response trailers as observed by the dataplane. The Header type is a (string, string) tuple. |
+| k8s.http.response.raw_trailers       | list< Header >              | All response trailers as observed by the dataplane. The Header type is a message type with two string values `{name, value}`. |
 
 ### MCP Vocabulary
 
