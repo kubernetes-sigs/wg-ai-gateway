@@ -3,6 +3,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -23,7 +24,8 @@ type server struct {
 
 func (s *server) Process(stream extprocv3.ExternalProcessor_ProcessServer) error {
 	log.Println("new ext_proc stream started")
-	var bodyBuf []byte
+	var modelBuf []byte
+	headerResponseSent := false
 
 	for {
 		req, err := stream.Recv()
@@ -38,9 +40,9 @@ func (s *server) Process(stream extprocv3.ExternalProcessor_ProcessServer) error
 		switch r := req.Request.(type) {
 		case *extprocv3.ProcessingRequest_RequestHeaders:
 			log.Printf("received request headers (eos=%v)", r.RequestHeaders.EndOfStream)
-			// POC: Only respond to headers when there is no body (end_of_stream).
-			// When a body is expected, we defer the response until we've read the
-			// full body and can set headers based on its content.
+			// Only respond to headers when there is no body (end_of_stream).
+			// When a body is expected, we defer the header response until we
+			// can extract the model from the body for header mutation.
 			if r.RequestHeaders.EndOfStream {
 				if err := stream.Send(&extprocv3.ProcessingResponse{
 					Response: &extprocv3.ProcessingResponse_RequestHeaders{
@@ -49,70 +51,69 @@ func (s *server) Process(stream extprocv3.ExternalProcessor_ProcessServer) error
 				}); err != nil {
 					return err
 				}
+				headerResponseSent = true
 			}
 
 		case *extprocv3.ProcessingRequest_RequestBody:
-			bodyBuf = append(bodyBuf, r.RequestBody.Body...)
-			log.Printf("received body chunk (eos=%v, total=%d)", r.RequestBody.EndOfStream, len(bodyBuf))
+			log.Printf("received body chunk (eos=%v, len=%d)", r.RequestBody.EndOfStream, len(r.RequestBody.Body))
 
-			// POC: Do not respond to intermediate body chunks. The data plane
-			// streams chunks without waiting for per-chunk acknowledgements.
-			// Only respond once we have the full body (end_of_stream).
-			if r.RequestBody.EndOfStream {
-				model := extractModel(bodyBuf)
-				log.Printf("extracted model: %q", model)
-
-				// POC: Send a RequestHeaders response with the header mutation.
-				// This is the pattern used by GIE's body-based router: header
-				// mutations are delivered via a RequestHeaders response even
-				// during body processing, so the data plane applies them to
-				// the request before route selection.
-				var headerMutation *extprocv3.HeaderMutation
-				if model != "" {
-					headerMutation = &extprocv3.HeaderMutation{
-						SetHeaders: []*corev3.HeaderValueOption{
-							{
-								Header: &corev3.HeaderValue{
-									Key:      "X-Gateway-Model-Name",
-									RawValue: []byte(model),
+			// If we haven't sent the header response yet, accumulate body
+			// data to incrementally extract the model field. Once found
+			// (or at end-of-stream), send the header response immediately.
+			if !headerResponseSent {
+				modelBuf = append(modelBuf, r.RequestBody.Body...)
+				model, found := tryExtractModel(modelBuf)
+				if found || r.RequestBody.EndOfStream {
+					log.Printf("extracted model: %q", model)
+					var headerMutation *extprocv3.HeaderMutation
+					if model != "" {
+						headerMutation = &extprocv3.HeaderMutation{
+							SetHeaders: []*corev3.HeaderValueOption{
+								{
+									Header: &corev3.HeaderValue{
+										Key:      "X-Gateway-Model-Name",
+										RawValue: []byte(model),
+									},
+								},
+							},
+						}
+					}
+					if err := stream.Send(&extprocv3.ProcessingResponse{
+						Response: &extprocv3.ProcessingResponse_RequestHeaders{
+							RequestHeaders: &extprocv3.HeadersResponse{
+								Response: &extprocv3.CommonResponse{
+									HeaderMutation: headerMutation,
 								},
 							},
 						},
+					}); err != nil {
+						return err
 					}
+					headerResponseSent = true
+					modelBuf = nil
 				}
-				if err := stream.Send(&extprocv3.ProcessingResponse{
-					Response: &extprocv3.ProcessingResponse_RequestHeaders{
-						RequestHeaders: &extprocv3.HeadersResponse{
-							Response: &extprocv3.CommonResponse{
-								HeaderMutation: headerMutation,
-							},
-						},
-					},
-				}); err != nil {
-					return err
-				}
+			}
 
-				// POC: Then send a RequestBody response echoing the buffered body
-				// via StreamedResponse so the upstream backend receives it.
-				if err := stream.Send(&extprocv3.ProcessingResponse{
-					Response: &extprocv3.ProcessingResponse_RequestBody{
-						RequestBody: &extprocv3.BodyResponse{
-							Response: &extprocv3.CommonResponse{
-								BodyMutation: &extprocv3.BodyMutation{
-									Mutation: &extprocv3.BodyMutation_StreamedResponse{
-										StreamedResponse: &extprocv3.StreamedBodyResponse{
-											Body:        bodyBuf,
-											EndOfStream: true,
-										},
+			// Full-duplex: forward each body chunk immediately instead of
+			// buffering the entire body. The data plane receives body data
+			// as it arrives rather than waiting for end-of-stream.
+			if err := stream.Send(&extprocv3.ProcessingResponse{
+				Response: &extprocv3.ProcessingResponse_RequestBody{
+					RequestBody: &extprocv3.BodyResponse{
+						Response: &extprocv3.CommonResponse{
+							BodyMutation: &extprocv3.BodyMutation{
+								Mutation: &extprocv3.BodyMutation_StreamedResponse{
+									StreamedResponse: &extprocv3.StreamedBodyResponse{
+										Body:        r.RequestBody.Body,
+										EndOfStream: r.RequestBody.EndOfStream,
 									},
 								},
 							},
 						},
 					},
-				}); err != nil {
-					return err
-				}
-				bodyBuf = nil
+				},
+			}); err != nil {
+				return err
 			}
 
 		case *extprocv3.ProcessingRequest_ResponseHeaders:
@@ -152,16 +153,53 @@ func (s *server) Process(stream extprocv3.ExternalProcessor_ProcessServer) error
 	}
 }
 
-func extractModel(body []byte) string {
-	var parsed map[string]interface{}
-	if err := json.Unmarshal(body, &parsed); err != nil {
-		log.Printf("failed to parse JSON: %v", err)
-		return ""
+// tryExtractModel attempts to extract the top-level "model" field from a
+// potentially incomplete JSON object using streaming token parsing.
+// Returns the model string and whether extraction succeeded. When found is
+// false, the caller should accumulate more data and retry.
+func tryExtractModel(data []byte) (model string, found bool) {
+	dec := json.NewDecoder(bytes.NewReader(data))
+
+	// Expect opening '{'
+	t, err := dec.Token()
+	if err != nil {
+		return "", false
 	}
-	if model, ok := parsed["model"].(string); ok {
-		return model
+	delim, ok := t.(json.Delim)
+	if !ok || delim != '{' {
+		return "", false
 	}
-	return ""
+
+	for dec.More() {
+		// Read key
+		t, err = dec.Token()
+		if err != nil {
+			return "", false // incomplete data
+		}
+		key, ok := t.(string)
+		if !ok {
+			return "", false
+		}
+
+		if key == "model" {
+			t, err = dec.Token()
+			if err != nil {
+				return "", false // value not yet received
+			}
+			if s, ok := t.(string); ok {
+				return s, true
+			}
+			return "", true // model exists but is not a string
+		}
+
+		// Skip value for non-"model" keys (handles nested objects/arrays)
+		var raw json.RawMessage
+		if err := dec.Decode(&raw); err != nil {
+			return "", false // incomplete data, need more chunks
+		}
+	}
+
+	return "", true // all keys parsed, no model found
 }
 
 func main() {

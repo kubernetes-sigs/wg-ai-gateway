@@ -39,7 +39,7 @@ func (a AddressResource) Equals(other AddressResource) bool {
 	return a.Key == other.Key
 }
 
-// TranslateServiceToAddress converts a K8s Service into an istio workload Address.
+// TranslateServiceToAddress converts a K8s Service into a workload Address.
 func TranslateServiceToAddress(svc *corev1.Service) *AddressResource {
 	if svc.Spec.ClusterIP == "" || svc.Spec.ClusterIP == "None" {
 		return nil
