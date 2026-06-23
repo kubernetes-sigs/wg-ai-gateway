@@ -152,7 +152,7 @@ Requirements:
   short-circuit rejection — if any processor rejects, subsequent processors
   are skipped.
 * **Two Processor Types**: **InProcess** processors use CEL expressions to
-  extract data from request bodies and mutate headers (e.g. body-based
+  extract data from request bodies and mutate headers or body fields (e.g. body-based
   routing). **ExtProcess** processors delegate to external gRPC services for
   arbitrary processing (e.g. PII scanning, prompt injection detection).
 * **Two Processing Phases**: **PreRouting** processors execute before HTTPRoute
@@ -162,9 +162,10 @@ Requirements:
 * **Failure Modes**: Each processor declares `FailClosed` (default, reject on
   error) or `FailOpen` (skip on error), enabling fine-grained control over
   behavior when processing fails.
-* **Payload Influences Headers**: InProcess processors use CEL to set, add, or
-  remove headers based on request body content.
-* **Rejection**: Processors can reject requests (and in future, responses).
+* **Payload Influences Headers/Body**: InProcess processors use CEL to set, add, or
+  remove headers or body fields, based on request content or other custom logic.
+* **Rejection**: Processors can reject requests and responses (we will focus on
+  requests in the first phase).
 * **Reusability**: As a separate CRD, a single `PayloadProcessor` can be
   reused across multiple routes and Gateways.
 
@@ -176,9 +177,9 @@ Client Request
     ▼
 ┌──────────────────────┐
 │  PreRouting Phase    │ ◄── PayloadProcessor (targetRef: Gateway)
-│  InProcess/ExtProc   │     Mutate headers from body content
+│  InProcess/ExtProc   │     Mutate headers/body
 └──────────┬───────────┘
-           │ (headers mutated)
+           │ (headers/body mutated)
            ▼
 ┌──────────────────────┐
 │  HTTPRoute Matching  │ ◄── Standard header/path/method matching
@@ -186,7 +187,7 @@ Client Request
            │ (route selected)
            ▼
 ┌──────────────────────┐
-│  PostRouting Phase   │ ◄── PayloadProcessor (targetRef: HTTPRoute)
+│  PostRouting Phase   │ ◄── PayloadProcessor (targetRef: Gateway/HTTPRoute)
 │  InProcess/ExtProc   │     PII scanning, enrichment, etc.
 └──────────┬───────────┘
            │
@@ -270,14 +271,22 @@ spec:
     inProcess:
       request:
         # set: overwrite or create headers with CEL expression values
-        set:
+        setHeaders:
         - name: X-Gateway-Model-Name
-          value: 'json(request.body).model'
-        # add: append headers (does not overwrite existing)
-        add: []
+          value: 'json(request.body).model' # CEl expression
+        - name: X-Gateway-Custom-Header
+          value: '"my-custom-value"' # string literal interpreted by CEL
         # remove: remove headers by name
-        remove: []
-
+        removeHeaders: []
+        # set: overwrite or create body fields with CEL expression values
+        setBodyFields:
+        - name: 'json(request.body).stream' # CEL expression
+          value: '"true"' # body can be built using static fields, CEL expressions on the body of the request or response, etc.
+        - name: 'json(request.body).response_format.type' # CEL expression - creates fields if they do not exist
+          value: '"json_object"'
+        # remove: remove body fields by name
+        removeBodyFields:
+        - name: temperature
   - name: pii-scanner
     type: ExtProcess
     failureMode: FailClosed
@@ -351,15 +360,29 @@ spec:
 * **Processing Loops**: The current design avoids processing loops — PreRouting
   processors execute once, mutate headers, and then HTTPRoute matching occurs
   on the mutated headers with no re-entry.
-* **Gateway and HTTPRoute Co-existence**: Gateway-targeted PreRouting processors
-  execute first, then HTTPRoute matching, then HTTPRoute-targeted PostRouting
-  processors. If both target the same phase, Gateway-level processors execute
-  before HTTPRoute-level processors.
+* **Gateway and HTTPRoute Target Co-existence**: Gateway-targeted PreRouting processors
+  execute first, then HTTPRoute matching, then HTTPRoute-targeted or
+  Gateway-targeted PostRouting processors. If PayloadProcessors target the same
+  phase with different target references (gateway vs. HTTPRoute), Gateway-level
+  processors execute before HTTPRoute-level processors. If PayloadProcessors
+  target the same phase with the same target reference, the newer resource is
+  ignored and the older resource is used. The failure/conflict is reflected
+  in the status of the newer resource.
 * **CEL Cost Budgets**: A cost budget mechanism for data plane CEL evaluation
   may be needed, similar to Kubernetes admission webhook CEL cost budgets.
 * **Body Buffer Size**: Whether the maximum body buffer size should be
-  configurable per-PayloadProcessor or remain a gateway-wide default is still
+  configurable per-PayloadProcessor or remain up to the implementation is still
   under discussion.
+* **Parallel Processing**: The ability to specify and process multiple payload
+  processors in parallel (both InProcess and ExtProcess). Adds complexity but
+  should be considered for performance in the next phase.
+* **Header and Body Modification Order**: There is no defined order for when
+  headers and body modifications occur relative to each other. This could lead to
+  unexpected behavior if the order matters for the processing logic.
+* **InProcess and ExtProcess Processing**: ExtProcess processors are considered
+  the heavy lifters of processing, while InProcess processors are more
+  lightweight and suitable for final formatting and transformation task.
+  ExtProcess processors are processed before InProcess processors.
 
 ## Proof of Concept
 
