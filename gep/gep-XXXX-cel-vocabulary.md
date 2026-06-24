@@ -123,13 +123,13 @@ contains identifiers for both representations.
 
 | Identifier                                    | Type   | Description
 |-----------------------------------------------|--------|------------------------------------------------------------------------------------------------|
-| k8s.tls.source.is_tls                         | bool   | Indicates whether TLS is applied to the client connection. If this value is false all other TLS attributes are empty values. |
-| k8s.tls.source.is_mtls                        | bool   | Indicates whether TLS is applied to the client connection and the peer certificate is presented. If this value is false all peer certificate values are empty. |
-| k8s.tls.source.requested_server_name          | string | Requested server name in the client TLS connection. |
-| k8s.tls.source.tls_version                    | string | TLS version of the client TLS connection. Version string is in the major.minor format. For example `1.3` |
-| k8s.tls.source.subject_certificate            | string | The subject field of the peer certificate in the client TLS connection. |
-| k8s.tls.source.san_certificate                | list&lt;SAN&gt; | List of Subject Alternative Names of the peer certificate in the client TLS connection. The SAN is a message type with two string values `{type, value}`. Supported types are case-insensitive, with the following reserved values `DNS`, `EMAIL`, `URI`, `IP` and `UPN`. If the type is not one of the reserved values, it is consiered a SAN OID or OID friendly name. |
-| k8s.tls.source.peer_certificate               | string | PEM-encoded peer certificate in the client TLS connection if present. |
+| k8s.tls.source.isTls                         | bool   | Indicates whether TLS is applied to the client connection. If this value is false all other TLS attributes are empty values. |
+| k8s.tls.source.isMTls                        | bool   | Indicates whether TLS is applied to the client connection and the peer certificate is presented. If this value is false all peer certificate values are empty. |
+| k8s.tls.source.requestedServerName          | string | Requested server name in the client TLS connection. |
+| k8s.tls.source.tlsVersion                    | string | TLS version of the client TLS connection. Version string is in the major.minor format. For example `1.3` |
+| k8s.tls.source.subjectCertificate            | string | The subject field of the peer certificate in the client TLS connection. |
+| k8s.tls.source.sanCertificate                | list&lt;SAN&gt; | List of Subject Alternative Names of the peer certificate in the client TLS connection. The SAN is a message type with two string values `{type, value}`. Supported types are case-insensitive, with the following reserved values `DNS`, `EMAIL`, `URI`, `IP` and `UPN`. If the type is not one of the reserved values, it is consiered a SAN OID or OID friendly name. |
+| k8s.tls.source.peerCertificate               | string | PEM-encoded peer certificate in the client TLS connection if present. |
 
 ### HTTP Vocabulary
 
@@ -137,16 +137,16 @@ contains identifiers for both representations.
 |--------------------------------------|-----------------------------|------------------------------------------------------------------------------------------------|
 | k8s.http.request.path                | string                      | The path portion of the URL, without query |
 | k8s.http.request.query               | string                      | The query portion of the URL |
-| k8s.http.request.path_and_query      | string                      | The path portion of the URL including the query string |
+| k8s.http.request.pathAndQuery      | string                      | The path portion of the URL including the query string |
 | k8s.http.request.authority           | string                      | The authority portion of the URL. It can include the port or the user info if present. |
 | k8s.http.request.scheme              | string                      | The scheme portion of the URL e.g. "http" |
 | k8s.http.request.method              | string                      | Request method e.g. "GET" |
 | k8s.http.request.protocol            | string                      | "Request protocol ('"HTTP/1.0'", '"HTTP/1.1'", '"HTTP/2'", or '"HTTP/3'")" |
 | k8s.http.request.headers             | map&lt;string, string&gt;         | All request headers indexed by the header name. If there are multiple headers with the same name, thier values are concatenated according to [RFC 9110, section 5.2](https://datatracker.ietf.org/doc/html/rfc9110#name-field-lines-and-combined-fi). |
-| k8s.http.request.raw_headers         | list&lt;Header&gt;                | All request headers in the order observed by the dataplane. Multiple headers with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
+| k8s.http.request.rawHeaders         | list&lt;Header&gt;                | All request headers in the order observed by the dataplane. Multiple headers with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
 | k8s.http.response.status.code        | int                         | HTTP response status code. |
 | k8s.http.response.headers            | map&lt;string, string&gt;         | All response headers indexed by the header name, with concatenated values. |
-| k8s.http.response.raw_headers        | list&lt;Header&gt;                | All response headers in the order observed by the dataplane. Multiple headers with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
+| k8s.http.response.rawHeaders        | list&lt;Header&gt;                | All response headers in the order observed by the dataplane. Multiple headers with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
 
 ### MCP Vocabulary
 
@@ -154,9 +154,9 @@ contains identifiers for both representations.
 |--------------------------------------|-----------------------------|-----------------------------------|
 | k8s.mcp.request.id                   | string                      | MCP request ID. |
 | k8s.mcp.request.method               | string                      | MCP request method. |
-| k8s.mcp.request.tool_name            | string                      | Tool name for MCP tools/call method. |
-| k8s.mcp.request.resource_uri         | string                      | Tool name for MCP resources/read method. |
-| k8s.mcp.response.is_error            | bool                        | True if the response is an error response. |
+| k8s.mcp.request.toolName            | string                      | Tool name for MCP tools/call method. |
+| k8s.mcp.request.resourceUri         | string                      | Tool name for MCP resources/read method. |
+| k8s.mcp.response.isError            | bool                        | True if the response is an error response. |
 | k8s.mcp.response.error.code          | int                         | MCP error code. |
 | k8s.mcp.response.error.message       | string                      | MCP error message. |
 
