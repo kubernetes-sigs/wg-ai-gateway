@@ -164,4 +164,4 @@ contains identifiers for both representations.
 
 | Identifier                           | Type                        | Description
 |--------------------------------------|-----------------------------|--------------------------------|
-| k8s.openai.model                     | string                      | Model name for the OpenAI request. |
+| k8s.llm.model                        | string                      | Model name for an inference request. |
