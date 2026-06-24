@@ -128,7 +128,7 @@ contains identifiers for both representations.
 | k8s.tls.source.requested_server_name          | string | Requested server name in the client TLS connection. |
 | k8s.tls.source.tls_version                    | string | TLS version of the client TLS connection. Version string is in the major.minor format. For example `1.3` |
 | k8s.tls.source.subject_certificate            | string | The subject field of the peer certificate in the client TLS connection. |
-| k8s.tls.source.san_certificate                | list< SAN > | List of Subject Alternative Names of the peer certificate in the client TLS connection. The SAN is a message type with two string values `{type, value}`. Supported types are case-insensitive, with the following reserved values `DNS`, `EMAIL`, `URI`, `IP` and `UPN`. If the type is not one of reserved values it is consiered a SAN OID or OID friendly name. |
+| k8s.tls.source.san_certificate                | list< SAN > | List of Subject Alternative Names of the peer certificate in the client TLS connection. The SAN is a message type with two string values `{type, value}`. Supported types are case-insensitive, with the following reserved values `DNS`, `EMAIL`, `URI`, `IP` and `UPN`. If the type is not one of the reserved values, it is consiered a SAN OID or OID friendly name. |
 | k8s.tls.source.peer_certificate               | string | PEM-encoded peer certificate in the client TLS connection if present. |
 
 ### HTTP Vocabulary
@@ -142,11 +142,11 @@ contains identifiers for both representations.
 | k8s.http.request.scheme              | string                      | The scheme portion of the URL e.g. "http" |
 | k8s.http.request.method              | string                      | Request method e.g. "GET" |
 | k8s.http.request.protocol            | string                      | "Request protocol ('"HTTP/1.0'", '"HTTP/1.1'", '"HTTP/2'", or '"HTTP/3'")" |
-| k8s.http.request.headers             | map<string | string >       | All request headers indexed by the header name. If there are multiple headers with the same name, thier values are concatenated according to [RFC 9110, section 5.2](https://datatracker.ietf.org/doc/html/rfc9110#name-field-lines-and-combined-fi). |
-| k8s.http.request.raw_headers         | list< Header >              | All request headers in the order observed by the dataplane. Multiple header with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
+| k8s.http.request.headers             | map<string, string>         | All request headers indexed by the header name. If there are multiple headers with the same name, thier values are concatenated according to [RFC 9110, section 5.2](https://datatracker.ietf.org/doc/html/rfc9110#name-field-lines-and-combined-fi). |
+| k8s.http.request.raw_headers         | list<Header>                | All request headers in the order observed by the dataplane. Multiple header with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
 | k8s.http.response.status.code        | int                         | HTTP response status code. |
-| k8s.http.response.headers            | map<string | string >       | All response headers indexed by the header name, with concatenated values. |
-| k8s.http.response.raw_headers        | list< Header >              | All response headers in the order observed by the dataplane. The Header is a message type with two string values `{name, value}`. |
+| k8s.http.response.headers            | map<string, string>         | All response headers indexed by the header name, with concatenated values. |
+| k8s.http.response.raw_headers        | list<Header>                | All response headers in the order observed by the dataplane. The Header is a message type with two string values `{name, value}`. |
 
 ### MCP Vocabulary
 
@@ -160,7 +160,7 @@ contains identifiers for both representations.
 | k8s.mcp.response.error.code          | int                         | MCP error code. |
 | k8s.mcp.response.error.message       | string                      | MCP error message. |
 
-### OpenAI  Vocabulary
+### LLM/Inference  Vocabulary
 
 | Identifier                           | Type                        | Description
 |--------------------------------------|-----------------------------|--------------------------------|
