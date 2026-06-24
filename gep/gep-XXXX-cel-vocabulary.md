@@ -143,10 +143,10 @@ contains identifiers for both representations.
 | k8s.http.request.method              | string                      | Request method e.g. "GET" |
 | k8s.http.request.protocol            | string                      | "Request protocol ('"HTTP/1.0'", '"HTTP/1.1'", '"HTTP/2'", or '"HTTP/3'")" |
 | k8s.http.request.headers             | map&lt;string, string&gt;         | All request headers indexed by the header name. If there are multiple headers with the same name, thier values are concatenated according to [RFC 9110, section 5.2](https://datatracker.ietf.org/doc/html/rfc9110#name-field-lines-and-combined-fi). |
-| k8s.http.request.raw_headers         | list&lt;Header&gt;                | All request headers in the order observed by the dataplane. Multiple header with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
+| k8s.http.request.raw_headers         | list&lt;Header&gt;                | All request headers in the order observed by the dataplane. Multiple headers with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
 | k8s.http.response.status.code        | int                         | HTTP response status code. |
 | k8s.http.response.headers            | map&lt;string, string&gt;         | All response headers indexed by the header name, with concatenated values. |
-| k8s.http.response.raw_headers        | list&lt;Header&gt;                | All response headers in the order observed by the dataplane. The Header is a message type with two string values `{name, value}`. |
+| k8s.http.response.raw_headers        | list&lt;Header&gt;                | All response headers in the order observed by the dataplane. Multiple headers with the same name are not concatenated. The Header is a message type with two string values `{name, value}`. |
 
 ### MCP Vocabulary
 
