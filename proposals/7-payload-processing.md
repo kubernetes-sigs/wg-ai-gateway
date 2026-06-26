@@ -280,13 +280,13 @@ spec:
         removeHeaders: []
         # set: overwrite or create body fields with CEL expression values
         setBodyFields:
-        - name: 'json(request.body).stream' # CEL expression
-          value: '"true"' # body can be built using static fields, CEL expressions on the body of the request or response, etc.
-        - name: 'json(request.body).response_format.type' # CEL expression - creates fields if they do not exist
-          value: '"json_object"'
+        - name: '$.stream' # JSONPath
+          value: 'true' # body can be built using static fields, CEL expressions on the body of the request or response, etc.
+        - name: '$.stream_options' # JSONPath
+          value: '{"include_usage": true}'
         # remove: remove body fields by name
         removeBodyFields:
-        - name: temperature
+        - name: '$.user_email' # JSONPath
   - name: pii-scanner
     type: ExtProcess
     failureMode: FailClosed
@@ -383,6 +383,9 @@ spec:
   the heavy lifters of processing, while InProcess processors are more
   lightweight and suitable for final formatting and transformation task.
   ExtProcess processors are processed before InProcess processors.
+* **Request and Response Handling**: Buffering a response can negatively impact time to first
+  token. If a payload process doesn't require buffering, the response can be processed
+  in chunks. The current API does not provide a way for users to control this behavior.
 
 ## Proof of Concept
 
