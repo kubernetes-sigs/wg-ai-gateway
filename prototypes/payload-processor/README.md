@@ -49,7 +49,7 @@ spec:
     failureMode: FailClosed
     inProcess:
       request:
-        set:
+        setHeaders:
         - name: X-Gateway-Model-Name
           value: 'json(request.body).model'
 ```
@@ -101,7 +101,7 @@ spec:
 | `spec.processors[]` | Ordered list of processing steps (max 16) |
 | `spec.processors[].type` | `InProcess` (CEL) or `ExtProc` (external gRPC) |
 | `spec.processors[].failureMode` | `FailClosed` (default) or `FailOpen` |
-| `spec.processors[].inProcess` | CEL-based header mutations (set/add/remove) |
+| `spec.processors[].inProcess` | CEL-based header mutations (setHeaders/removeHeaders) and JSON body field mutations (setBodyFields/removeBodyFields) |
 | `spec.processors[].extProc` | Backend reference to external processor service |
 
 ## Testing
@@ -161,6 +161,68 @@ curl -X POST http://gateway:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{"model": "llama", "messages": [{"role": "user", "content": "hello"}]}'
 ```
+
+### Verify Body Mutation (Streaming)
+
+The InProcess sample
+([config/samples/payloadprocessor-inprocess.yaml](config/samples/payloadprocessor-inprocess.yaml))
+also mutates the JSON request body before it reaches the backend:
+
+- `setBodyFields` injects `stream: true` and `stream_options.include_usage: true`
+- `removeBodyFields` strips `user_email`
+
+The simulated backends honor the OpenAI `stream` field, so a successful body
+mutation flips the upstream response from a single JSON object
+(`Content-Type: application/json`) to Server-Sent Events
+(`Content-Type: text/event-stream`). The response `Content-Type` is therefore a
+reliable, transport-level signal of whether the body mutation was applied.
+
+```bash
+# Apply the InProcess PayloadProcessor (sets routing header + mutates body)
+kubectl apply -f config/samples/payloadprocessor-inprocess.yaml
+```
+
+**Affirmative case — mutation applied (through the gateway).**
+The client sends a *non-streaming* request (no `stream` field). The processor
+injects `stream: true`, so the gateway should respond with `text/event-stream`:
+
+```bash
+# Expect: HTTP/1.1 200 + Content-Type: text/event-stream  (body mutation worked)
+curl -sN --max-time 10 -D - -o /dev/null -X POST http://gateway:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}], "user_email": "user@example.com"}' \
+  | grep -iE '^(HTTP/|content-type):'
+
+# Stream the body to see SSE frames ending in `data: [DONE]`
+curl -sN --max-time 10 -X POST http://gateway:8080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}], "user_email": "user@example.com"}'
+```
+
+**Negative case — mutation NOT applied (control, bypassing the gateway).**
+Send the *same* request directly to the backend, skipping the PayloadProcessor.
+Without the injected `stream: true` the backend returns a single JSON object,
+confirming the streaming behavior above is caused by the body mutation and not by
+a backend default:
+
+```bash
+# Port-forward straight to the backend the gpt-4 request routes to
+kubectl port-forward -n default svc/gpt4-backend 8081:8080 &
+
+# Expect: HTTP/1.1 200 + Content-Type: application/json  (no mutation, no SSE)
+curl -sN --max-time 10 -D - -o /dev/null -X POST http://localhost:8081/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model": "gpt-4", "messages": [{"role": "user", "content": "hello"}], "user_email": "user@example.com"}' \
+  | grep -iE '^(HTTP/|content-type):'
+
+# Stop the port-forward when done
+kill %1
+```
+
+> The same `application/json` baseline appears if the mutation CEL fails to
+> evaluate: agentgateway replaces the body with an empty one on failure, so the
+> backend rejects the request (HTTP 400) instead of streaming. A `200` with
+> `text/event-stream` confirms the expression compiled and ran.
 
 ## ExtProc Protocol Pattern
 

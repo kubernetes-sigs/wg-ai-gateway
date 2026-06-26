@@ -29,6 +29,10 @@ spec:
       containers:
       - name: agentgateway
         image: {{ .Image }}
+        # agentgateway (>= v1.3.x) refuses to start in Kubernetes without an explicit
+        # config source. An empty inline config satisfies that requirement; the xDS
+        # address, namespace, and gateway name are still supplied via the env vars below.
+        args: ["-c", "{}"]
         env:
         - name: POD_NAME
           valueFrom:

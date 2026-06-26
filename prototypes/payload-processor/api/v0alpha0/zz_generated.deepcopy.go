@@ -128,19 +128,24 @@ func (in *InProcessConfig) DeepCopy() *InProcessConfig {
 
 func (in *InProcessTransform) DeepCopyInto(out *InProcessTransform) {
 	*out = *in
-	if in.Set != nil {
-		in, out := &in.Set, &out.Set
+	if in.SetHeaders != nil {
+		in, out := &in.SetHeaders, &out.SetHeaders
 		*out = make([]HeaderTransformation, len(*in))
 		copy(*out, *in)
 	}
-	if in.Add != nil {
-		in, out := &in.Add, &out.Add
-		*out = make([]HeaderTransformation, len(*in))
-		copy(*out, *in)
-	}
-	if in.Remove != nil {
-		in, out := &in.Remove, &out.Remove
+	if in.RemoveHeaders != nil {
+		in, out := &in.RemoveHeaders, &out.RemoveHeaders
 		*out = make([]HeaderName, len(*in))
+		copy(*out, *in)
+	}
+	if in.SetBodyFields != nil {
+		in, out := &in.SetBodyFields, &out.SetBodyFields
+		*out = make([]BodyFieldTransformation, len(*in))
+		copy(*out, *in)
+	}
+	if in.RemoveBodyFields != nil {
+		in, out := &in.RemoveBodyFields, &out.RemoveBodyFields
+		*out = make([]BodyFieldRemoval, len(*in))
 		copy(*out, *in)
 	}
 }
@@ -159,6 +164,28 @@ func (in *HeaderTransformation) DeepCopy() *HeaderTransformation {
 		return nil
 	}
 	out := new(HeaderTransformation)
+	*out = *in
+	return out
+}
+
+func (in *BodyFieldTransformation) DeepCopy() *BodyFieldTransformation {
+	if in == nil {
+		return nil
+	}
+	out := new(BodyFieldTransformation)
+	*out = *in
+	return out
+}
+
+func (in *BodyFieldRemoval) DeepCopyInto(out *BodyFieldRemoval) {
+	*out = *in
+}
+
+func (in *BodyFieldRemoval) DeepCopy() *BodyFieldRemoval {
+	if in == nil {
+		return nil
+	}
+	out := new(BodyFieldRemoval)
 	*out = *in
 	return out
 }

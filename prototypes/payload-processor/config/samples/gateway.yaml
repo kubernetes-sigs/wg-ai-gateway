@@ -1,3 +1,18 @@
+# Gateway + HTTPRoutes for the PayloadProcessor InProcess demo.
+#
+# Body-mutation streaming validation (see payloadprocessor-inprocess.yaml):
+#   POST /v1/chat/completions with body {"model":"gpt-4", ...} and NO `stream` field.
+#   The PayloadProcessor (PreRouting) sets X-Gateway-Model-Name from the body's
+#   model field and injects stream=true into the body. Request then matches
+#   gpt4-route below and is forwarded to gpt4-backend.
+#
+#   Expected signals:
+#     * PP active   -> upstream sees stream=true -> response is SSE
+#                      (Content-Type: text/event-stream, body ends with [DONE]).
+#     * PP removed  -> body unchanged -> response is a single JSON object
+#                      (Content-Type: application/json). Use {"model":"default"}
+#                      for the negative control so it routes cleanly via
+#                      fallback-route to default-backend.
 apiVersion: gateway.networking.k8s.io/v1
 kind: Gateway
 metadata:

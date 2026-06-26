@@ -8,6 +8,8 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"strconv"
+	"strings"
 
 	"k8s.io/apimachinery/pkg/types"
 	gwv1 "sigs.k8s.io/gateway-api/apis/v1"
@@ -196,7 +198,7 @@ func convertTransform(in *v0alpha0.InProcessTransform) *api.TrafficPolicySpec_Tr
 	}
 	var t *api.TrafficPolicySpec_TransformationPolicy_Transform
 
-	for _, h := range in.Set {
+	for _, h := range in.SetHeaders {
 		if t == nil {
 			t = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
 		}
@@ -206,26 +208,84 @@ func convertTransform(in *v0alpha0.InProcessTransform) *api.TrafficPolicySpec_Tr
 		})
 	}
 
-	for _, h := range in.Add {
+	if len(in.RemoveHeaders) > 0 {
 		if t == nil {
 			t = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
 		}
-		t.Add = append(t.Add, &api.TrafficPolicySpec_HeaderTransformation{
-			Name:       string(h.Name),
-			Expression: string(h.Value),
-		})
-	}
-
-	if len(in.Remove) > 0 {
-		if t == nil {
-			t = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
-		}
-		for _, r := range in.Remove {
+		for _, r := range in.RemoveHeaders {
 			t.Remove = append(t.Remove, string(r))
 		}
 	}
 
+	if body := composeBodyExpression(in); body != "" {
+		if t == nil {
+			t = &api.TrafficPolicySpec_TransformationPolicy_Transform{}
+		}
+		t.Body = &api.TrafficPolicySpec_BodyTransformation{
+			Expression: body,
+		}
+	}
+
 	return t
+}
+
+// composeBodyExpression builds a single CEL body-transformation expression from
+// the per-field setBodyFields and removeBodyFields operations.
+//
+// agentgateway models body mutation as one CEL expression whose result replaces
+// the entire request/response body (see agentgateway's transformation_cel.rs:
+// the policy has a single `body` expression, and if it fails to evaluate the
+// body is replaced with an empty one). There is no per-field set/remove in the
+// data plane, so the controller composes the field operations into a single
+// expression using the documented CEL functions json(), filterKeys(), merge(),
+// and toJson():
+//
+//	toJson(json(request.body)
+//	    .filterKeys(k, !(k in ["<removed>", ...]))  // removeBodyFields
+//	    .merge({"<set>": <valueCEL>, ...}))          // setBodyFields
+//
+// Each field name is a JSONPath; this prototype supports root-level fields, so
+// the leading "$." is stripped to obtain the top-level JSON key. Each
+// setBodyFields value is a CEL expression emitted verbatim (merge runs after
+// filterKeys so a field that is both removed and set ends up set). When the body
+// changes, the data plane drops the Content-Length header automatically.
+//
+// Returns an empty string when there are no body mutations.
+func composeBodyExpression(in *v0alpha0.InProcessTransform) string {
+	if len(in.SetBodyFields) == 0 && len(in.RemoveBodyFields) == 0 {
+		return ""
+	}
+
+	expr := "json(request.body)"
+
+	if len(in.RemoveBodyFields) > 0 {
+		keys := make([]string, 0, len(in.RemoveBodyFields))
+		for _, r := range in.RemoveBodyFields {
+			keys = append(keys, strconv.Quote(bodyFieldKey(r.Name)))
+		}
+		expr += fmt.Sprintf(".filterKeys(k, !(k in [%s]))", strings.Join(keys, ", "))
+	}
+
+	if len(in.SetBodyFields) > 0 {
+		pairs := make([]string, 0, len(in.SetBodyFields))
+		for _, f := range in.SetBodyFields {
+			pairs = append(pairs, fmt.Sprintf("%s: %s", strconv.Quote(bodyFieldKey(f.Name)), string(f.Value)))
+		}
+		expr += fmt.Sprintf(".merge({%s})", strings.Join(pairs, ", "))
+	}
+
+	return "toJson(" + expr + ")"
+}
+
+// bodyFieldKey converts a root-level JSONPath (e.g. "$.stream") into the
+// top-level JSON object key (e.g. "stream"). The prototype supports only
+// root-level fields, which is sufficient for OpenAI request-shaping use cases
+// such as injecting stream and stream_options.
+func bodyFieldKey(path v0alpha0.JSONPath) string {
+	k := strings.TrimSpace(string(path))
+	k = strings.TrimPrefix(k, "$")
+	k = strings.TrimPrefix(k, ".")
+	return k
 }
 
 // BackendResolver resolves a BackendObjectReference to an agentgateway BackendReference.

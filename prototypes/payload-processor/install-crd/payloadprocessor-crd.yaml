@@ -81,7 +81,7 @@ spec:
                         request:
                           type: object
                           properties:
-                            set:
+                            setHeaders:
                               type: array
                               maxItems: 16
                               items:
@@ -94,28 +94,41 @@ spec:
                                     maxLength: 256
                                   value:
                                     type: string
-                            add:
-                              type: array
-                              maxItems: 16
-                              items:
-                                type: object
-                                required: ["name", "value"]
-                                properties:
-                                  name:
-                                    type: string
-                                    minLength: 1
-                                    maxLength: 256
-                                  value:
-                                    type: string
-                            remove:
+                            removeHeaders:
                               type: array
                               maxItems: 16
                               items:
                                 type: string
+                            setBodyFields:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name", "value"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 1024
+                                  value:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 1024
+                            removeBodyFields:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 1024
                         response:
                           type: object
                           properties:
-                            set:
+                            setHeaders:
                               type: array
                               maxItems: 16
                               items:
@@ -128,24 +141,37 @@ spec:
                                     maxLength: 256
                                   value:
                                     type: string
-                            add:
-                              type: array
-                              maxItems: 16
-                              items:
-                                type: object
-                                required: ["name", "value"]
-                                properties:
-                                  name:
-                                    type: string
-                                    minLength: 1
-                                    maxLength: 256
-                                  value:
-                                    type: string
-                            remove:
+                            removeHeaders:
                               type: array
                               maxItems: 16
                               items:
                                 type: string
+                            setBodyFields:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name", "value"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 1024
+                                  value:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 1024
+                            removeBodyFields:
+                              type: array
+                              maxItems: 16
+                              items:
+                                type: object
+                                required: ["name"]
+                                properties:
+                                  name:
+                                    type: string
+                                    minLength: 1
+                                    maxLength: 1024
                     extProcess:
                       type: object
                       required: ["backendRef"]

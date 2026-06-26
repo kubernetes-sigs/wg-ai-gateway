@@ -159,13 +159,13 @@ type InProcessConfig struct {
 	Response InProcessTransform `json:"response"`
 }
 
-// InProcessTransform defines header mutations using CEL expressions.
+// InProcessTransform defines header and body mutations using CEL expressions.
 // CEL expressions can access request.body via the json() function,
 // e.g. json(request.body).model
 //
 // +kubebuilder:validation:AtLeastOneFieldSet
 type InProcessTransform struct {
-	// set is a list of headers to set (overwrite if existing).
+	// setHeaders is a list of headers to set (overwrite if existing).
 	// The value is a CEL expression.
 	//
 	// +listType=map
@@ -173,25 +173,41 @@ type InProcessTransform struct {
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
-	Set []HeaderTransformation `json:"set,omitempty"`
+	SetHeaders []HeaderTransformation `json:"setHeaders,omitempty"`
 
-	// add is a list of headers to append (add alongside existing).
-	// The value is a CEL expression.
-	//
-	// +listType=map
-	// +listMapKey=name
-	// +kubebuilder:validation:MinItems=1
-	// +kubebuilder:validation:MaxItems=16
-	// +optional
-	Add []HeaderTransformation `json:"add,omitempty"`
-
-	// remove is a list of header names to remove.
+	// removeHeaders is a list of header names to remove.
 	//
 	// +listType=set
 	// +kubebuilder:validation:MinItems=1
 	// +kubebuilder:validation:MaxItems=16
 	// +optional
-	Remove []HeaderName `json:"remove,omitempty"`
+	RemoveHeaders []HeaderName `json:"removeHeaders,omitempty"`
+
+	// setBodyFields is a list of JSON body fields to set (create or overwrite).
+	// The field name is a JSONPath expression identifying the target field
+	// within the JSON body, and the value is a CEL expression that resolves to
+	// the value assigned to that field. When the body is mutated, the
+	// Content-Length header is updated automatically by the data plane.
+	//
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	SetBodyFields []BodyFieldTransformation `json:"setBodyFields,omitempty"`
+
+	// removeBodyFields is a list of JSON body fields to remove. Each entry's
+	// name is a JSONPath expression identifying the field to remove from the
+	// body. Unlike setBodyFields, only the name (path) is interpreted; there is
+	// no value expression. When the body is mutated, the Content-Length header
+	// is updated automatically by the data plane.
+	//
+	// +listType=map
+	// +listMapKey=name
+	// +kubebuilder:validation:MinItems=1
+	// +kubebuilder:validation:MaxItems=16
+	// +optional
+	RemoveBodyFields []BodyFieldRemoval `json:"removeBodyFields,omitempty"`
 }
 
 // An HTTP Header Name.
@@ -201,6 +217,14 @@ type InProcessTransform struct {
 // +kubebuilder:validation:Pattern=`^[A-Za-z0-9!#$%&'*+\-.^_\x60|~]+$`
 // +k8s:deepcopy-gen=false
 type HeaderName string
+
+// JSONPath is a JSONPath expression identifying a field within a JSON body,
+// e.g. '$.stream' or '$.stream_options.include_usage'.
+//
+// +kubebuilder:validation:MinLength=1
+// +kubebuilder:validation:MaxLength=1024
+// +k8s:deepcopy-gen=false
+type JSONPath string
 
 // HeaderTransformation sets a header to a CEL-evaluated value.
 type HeaderTransformation struct {
@@ -212,6 +236,30 @@ type HeaderTransformation struct {
 	// Use json(request.body).fieldName to extract from the JSON body.
 	// +required
 	Value CELExpression `json:"value"`
+}
+
+// BodyFieldTransformation sets a JSON body field to a CEL-evaluated value.
+// The name is a JSONPath expression identifying the target field within the
+// JSON body, and the value is a CEL expression that resolves to the value to
+// assign.
+type BodyFieldTransformation struct {
+	// name is the JSONPath expression identifying the target body field
+	// (e.g. '$.stream' or '$.stream_options.include_usage').
+	// +required
+	Name JSONPath `json:"name"`
+
+	// value is the CEL expression that produces the field value.
+	// It may reference the request body, e.g. json(request.body).model.
+	// +required
+	Value CELExpression `json:"value"`
+}
+
+// BodyFieldRemoval identifies a JSON body field to remove.
+type BodyFieldRemoval struct {
+	// name is the JSONPath expression identifying the body field to remove
+	// (e.g. '$.user_email').
+	// +required
+	Name JSONPath `json:"name"`
 }
 
 // ExtProcessConfig configures communication with an external processor.
