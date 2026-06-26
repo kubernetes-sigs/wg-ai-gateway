@@ -1,0 +1,89 @@
+# Gateway + HTTPRoutes for the PayloadProcessor InProcess demo.
+#
+# Body-mutation streaming validation (see payloadprocessor-inprocess.yaml):
+#   POST /v1/chat/completions with body {"model":"gpt-4", ...} and NO `stream` field.
+#   The PayloadProcessor (PreRouting) sets X-Gateway-Model-Name from the body's
+#   model field and injects stream=true into the body. Request then matches
+#   gpt4-route below and is forwarded to gpt4-backend.
+#
+#   Expected signals:
+#     * PP active   -> upstream sees stream=true -> response is SSE
+#                      (Content-Type: text/event-stream, body ends with [DONE]).
+#     * PP removed  -> body unchanged -> response is a single JSON object
+#                      (Content-Type: application/json). Use {"model":"default"}
+#                      for the negative control so it routes cleanly via
+#                      fallback-route to default-backend.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: ai-gateway
+  namespace: default
+spec:
+  gatewayClassName: agentgateway
+  listeners:
+  - name: http
+    protocol: HTTP
+    port: 8080
+
+---
+# HTTPRoute: routes to gpt-4 backend when model header matches
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: gpt4-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+      headers:
+      - name: X-Gateway-Model-Name
+        value: gpt-4
+    backendRefs:
+    - name: gpt4-backend
+      port: 8080
+
+---
+# HTTPRoute: routes to claude backend when model header matches
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: claude-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+      headers:
+      - name: X-Gateway-Model-Name
+        value: claude
+    backendRefs:
+    - name: claude-backend
+      port: 8080
+
+---
+# HTTPRoute: fallback for unknown models
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: fallback-route
+  namespace: default
+spec:
+  parentRefs:
+  - name: ai-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+    backendRefs:
+    - name: default-backend
+      port: 8080
