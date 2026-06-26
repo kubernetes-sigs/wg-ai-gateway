@@ -1,0 +1,110 @@
+## Sample payload processing configuration.
+##
+## This example adds a guardrail processor to an AI inference route.
+## The processor receives request bodies and can reject or modify them
+## before they reach the backend.
+##
+## Prerequisites:
+## - Apply gateway.yaml first (creates the Gateway and GatewayClass)
+## - Deploy the sample-guardrail-processor (see below)
+##
+## Usage:
+##   kubectl apply -f payload-processing.yaml
+---
+# The processor service — a gRPC server implementing envoy.service.ext_proc.v3.ExternalProcessor.
+# Replace this with your own processor image.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-guardrail-processor
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sample-guardrail-processor
+  template:
+    metadata:
+      labels:
+        app: sample-guardrail-processor
+    spec:
+      containers:
+      - name: processor
+        image: sample-guardrail-processor:latest  # Build from examples/guardrail-processor/
+        ports:
+        - containerPort: 50051
+          protocol: TCP
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sample-guardrail-processor
+  namespace: default
+spec:
+  selector:
+    app: sample-guardrail-processor
+  ports:
+  - port: 50051
+    targetPort: 50051
+    protocol: TCP
+    appProtocol: grpc
+---
+# The XPayloadProcessor resource — declares this service as an ext_proc processor.
+apiVersion: ainetworking.prototype.x-k8s.io/v0alpha0
+kind: XPayloadProcessor
+metadata:
+  name: guardrail
+  namespace: default
+spec:
+  backendRef:
+    name: sample-guardrail-processor
+    port: 50051
+  processingMode:
+    requestHeaders: Send
+    requestBody: Buffered
+    responseHeaders: Skip
+    responseBody: Skip
+  messageTimeout: 500ms
+  failureMode: Closed  # Block requests when the processor is down
+---
+# An inference backend (e.g., vLLM)
+apiVersion: ainetworking.prototype.x-k8s.io/v0alpha0
+kind: XBackendDestination
+metadata:
+  name: inference-backend
+  namespace: default
+spec:
+  destination:
+    type: Fqdn
+    fqdn:
+      hostname: vllm.example.com
+    ports:
+    - number: 8080
+      protocol: HTTP
+---
+# HTTPRoute with the processor attached via ExtensionRef.
+# The guardrail processor inspects the request body before forwarding to the backend.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: inference-with-guardrail
+  namespace: default
+spec:
+  parentRefs:
+  - name: httpbin-gateway
+  rules:
+  - matches:
+    - path:
+        type: PathPrefix
+        value: /v1/chat/completions
+    filters:
+    - type: ExtensionRef
+      extensionRef:
+        group: ainetworking.prototype.x-k8s.io
+        kind: XPayloadProcessor
+        name: guardrail
+    backendRefs:
+    - name: inference-backend
+      kind: Backend
+      group: ainetworking.prototype.x-k8s.io
+      port: 8080

@@ -25,3 +25,11 @@ type XBackendDestinationListerExpansion interface{}
 // XBackendDestinationNamespaceListerExpansion allows custom methods to be added to
 // XBackendDestinationNamespaceLister.
 type XBackendDestinationNamespaceListerExpansion interface{}
+
+// XPayloadProcessorListerExpansion allows custom methods to be added to
+// XPayloadProcessorLister.
+type XPayloadProcessorListerExpansion interface{}
+
+// XPayloadProcessorNamespaceListerExpansion allows custom methods to be added to
+// XPayloadProcessorNamespaceLister.
+type XPayloadProcessorNamespaceListerExpansion interface{}

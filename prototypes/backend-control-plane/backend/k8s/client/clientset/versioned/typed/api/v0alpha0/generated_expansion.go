@@ -19,3 +19,5 @@ limitations under the License.
 package v0alpha0
 
 type XBackendDestinationExpansion interface{}
+
+type XPayloadProcessorExpansion interface{}

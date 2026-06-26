@@ -269,8 +269,20 @@ func (t *translator) resolveClientCertificate(ref *gatewayv1.SecretObjectReferen
 	}, nil
 }
 
-// translateListenerToFilterChain creates a filter chain for an Envoy listener
-func (t *translator) translateListenerToFilterChain(gateway *gatewayv1.Gateway, listener gatewayv1.Listener, routeConfig *routev3.RouteConfiguration) (*listenerv3.FilterChain, error) {
+// translateListenerToFilterChain creates a filter chain for an Envoy listener.
+// processors are XPayloadProcessor resources referenced by routes on this listener;
+// they are translated into ext_proc HTTP filters placed before the Router filter.
+func (t *translator) translateListenerToFilterChain(gateway *gatewayv1.Gateway, listener gatewayv1.Listener, routeConfig *routev3.RouteConfiguration, processors []*v0alpha0.XPayloadProcessor) (*listenerv3.FilterChain, error) {
+	// Build HTTP filter chain: ext_proc filters first (in order), then the router
+	httpFilters := buildExtProcHTTPFilters(processors)
+	// Router must always be the last HTTP filter
+	httpFilters = append(httpFilters, &hcmv3.HttpFilter{
+		Name: wellknown.Router,
+		ConfigType: &hcmv3.HttpFilter_TypedConfig{
+			TypedConfig: protoconv.MessageToAny(&routerv3.Router{}),
+		},
+	})
+
 	// Create HTTP connection manager filter
 	hcm := &hcmv3.HttpConnectionManager{
 		CodecType:  hcmv3.HttpConnectionManager_AUTO,
@@ -278,15 +290,7 @@ func (t *translator) translateListenerToFilterChain(gateway *gatewayv1.Gateway, 
 		RouteSpecifier: &hcmv3.HttpConnectionManager_RouteConfig{
 			RouteConfig: routeConfig,
 		},
-		// Add HTTP filters - router is required for request routing
-		HttpFilters: []*hcmv3.HttpFilter{
-			{
-				Name: wellknown.Router,
-				ConfigType: &hcmv3.HttpFilter_TypedConfig{
-					TypedConfig: protoconv.MessageToAny(&routerv3.Router{}),
-				},
-			},
-		},
+		HttpFilters: httpFilters,
 		// Add proper timeout configurations
 		RequestTimeout:    durationpb.New(60 * time.Second), // 60s request timeout
 		StreamIdleTimeout: durationpb.New(15 * time.Second), // 15s stream idle timeout

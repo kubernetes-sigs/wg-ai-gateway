@@ -29,6 +29,7 @@ import (
 type AinetworkingV0alpha0Interface interface {
 	RESTClient() rest.Interface
 	XBackendDestinationsGetter
+	XPayloadProcessorsGetter
 }
 
 // AinetworkingV0alpha0Client is used to interact with features provided by the ainetworking.prototype.x-k8s.io group.
@@ -38,6 +39,10 @@ type AinetworkingV0alpha0Client struct {
 
 func (c *AinetworkingV0alpha0Client) XBackendDestinations(namespace string) XBackendDestinationInterface {
 	return newXBackendDestinations(c, namespace)
+}
+
+func (c *AinetworkingV0alpha0Client) XPayloadProcessors(namespace string) XPayloadProcessorInterface {
+	return newXPayloadProcessors(c, namespace)
 }
 
 // NewForConfig creates a new AinetworkingV0alpha0Client for the given config.

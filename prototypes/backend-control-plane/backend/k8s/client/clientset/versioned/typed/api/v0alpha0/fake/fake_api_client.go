@@ -32,6 +32,10 @@ func (c *FakeAinetworkingV0alpha0) XBackendDestinations(namespace string) v0alph
 	return newFakeXBackendDestinations(c, namespace)
 }
 
+func (c *FakeAinetworkingV0alpha0) XPayloadProcessors(namespace string) v0alpha0.XPayloadProcessorInterface {
+	return newFakeXPayloadProcessors(c, namespace)
+}
+
 // RESTClient returns a RESTClient that is used to communicate
 // with API server by this client implementation.
 func (c *FakeAinetworkingV0alpha0) RESTClient() rest.Interface {
