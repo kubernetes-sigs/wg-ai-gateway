@@ -359,7 +359,8 @@ spec:
       as well as require the gateway implementation to support full-duplexing?
 * **Processing Loops**: The current design avoids processing loops — PreRouting
   processors execute once, mutate headers, and then HTTPRoute matching occurs
-  on the mutated headers with no re-entry.
+  on the mutated headers with no re-entry. Post-routing rules can mutate headers
+  but they will not impact the routing decision.
 * **Gateway and HTTPRoute Target Co-existence**: Gateway-targeted PreRouting processors
   execute first, then HTTPRoute matching, then HTTPRoute-targeted or
   Gateway-targeted PostRouting processors. If PayloadProcessors target the same
@@ -381,11 +382,23 @@ spec:
   unexpected behavior if the order matters for the processing logic.
 * **InProcess and ExtProcess Processing**: ExtProcess processors are considered
   the heavy lifters of processing, while InProcess processors are more
-  lightweight and suitable for final formatting and transformation task.
+  lightweight and suitable for final formatting and transformation tasks.
   ExtProcess processors are processed before InProcess processors.
 * **Request and Response Handling**: Buffering a response can negatively impact time to first
   token. If a payload process doesn't require buffering, the response can be processed
   in chunks. The current API does not provide a way for users to control this behavior.
+* **Injecting Confidential Data**: The current design does not provide a mechanism
+  for injecting confidential data (e.g. API keys, secrets) into the request or response
+  payloads and/or headers. This could be a potential security concern and will
+  require additional mechanisms to handle securely. For example, each inProcess processor
+  could have a `secretRef` field that allows users to specify which secrets to inject.
+  The gateway implementation would then be responsible for securely retrieving and
+  injecting the secrets into the payloads and/or headers. Another approach could be to
+  provide a mechanism for users to define a set of confidential data refs accessible for
+  all processor specs. Each processor can reference these refs for injection via
+  a predefined key. For example, `credential.<cred name(as defined in PP CR)>.<cred field>`.
+  The exact mechanism for securely injecting confidential data will be addressed
+  in the next phase.
 
 ## Proof of Concept
 
