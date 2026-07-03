@@ -210,12 +210,6 @@ Client Request
   configuring Gateway consumption of Processors (both due to latency concerns,
   and also since cross-node/cross-AZ traffic may have cloud-networking costs
   associated with it).
-* Processor MAY support scale based on operational metrics from Gateway.
-* Processor MAY present indications of its capacity (or lack thereof) to
-  Gateway. Gateway MAY support reducing the traffic load on the Processor if
-  such indications are presented. In some scenarios, the user MAY prefer
-  degrading payload processing over significant impact on data plane
-  performance.
 
 ## Resource Model
 
@@ -399,6 +393,15 @@ spec:
   a predefined key. For example, `credential.<cred name(as defined in PP CR)>.<cred field>`.
   The exact mechanism for securely injecting confidential data will be addressed
   in the next phase.
+
+## Deferred Operational Requirements and Assumptions
+
+* Processor MAY support scale based on operational metrics from Gateway.
+* Processor MAY present indications of its capacity (or lack thereof) to
+  Gateway. Gateway MAY support reducing the traffic load on the Processor if
+  such indications are presented. In some scenarios, the user MAY prefer
+  degrading payload processing over significant impact on data plane
+  performance.
 
 ## Proof of Concept
 
