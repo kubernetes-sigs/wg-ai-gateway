@@ -16,16 +16,17 @@ processing for routing, security, and compliance decisions.
 The `PayloadProcessor` resource attaches to a `Gateway` or `HTTPRoute` via
 policy attachment ([GEP-713]) and defines an ordered list of processors. Each
 processor is either **InProcess** (CEL expressions evaluated in the data plane
-for header mutation based on body content) or **ExtProc** (an external gRPC
-service that receives the payload for arbitrary processing). Processors execute
-sequentially with per-processor failure modes, enabling composable processing
-pipelines such as "extract model name from body → set routing header →
-reject if PII detected."
+for header and body field mutation based on body content) or **ExtProcess** (an
+external gRPC service that receives the payload for arbitrary processing).
+Processors execute sequentially with per-processor failure modes, enabling
+composable processing pipelines such as "extract model name from body → set
+routing header → reject if PII detected."
 
-While the API surface supports both InProcess and ExtProc processor types, this
-GEP's initial scope is limited to InProcess header mutation from request body
-content, which has been validated by a [proof-of-concept implementation].
-The ExtProc processing protocol standardization is deferred to a follow-on GEP.
+While the API surface supports both InProcess and ExtProcess processor types,
+this GEP's initial scope is limited to InProcess header and body field mutation
+from request body content, which has been validated by a
+[proof-of-concept implementation]. The ExtProcess processing protocol
+standardization is deferred to a follow-on GEP.
 
 [GEP-713]: https://gateway-api.sigs.k8s.io/geps/gep-713/
 [proof-of-concept implementation]: https://github.com/kubernetes-sigs/wg-ai-gateway/pull/56
@@ -83,8 +84,8 @@ external services or implementation-specific chaining mechanisms.
   resource for declaring ordered payload processing steps on HTTP requests and
   responses.
 * Support **InProcess** processors that use CEL expressions to extract data from
-  request bodies and mutate headers, enabling body-based routing without
-  external services.
+  request bodies and mutate headers and body fields, enabling body-based routing
+  without external services.
 * Support **ExtProcess** processors that delegate payload processing to external
   gRPC services referenced via `backendRef`, enabling arbitrary processing
   logic (security scanning, PII detection, semantic analysis).
@@ -193,11 +194,11 @@ and/or response payloads.
 │    │     → Set X-Gateway-Model-Name header   │   │
 │    │     failureMode: FailClosed             │   │
 │    ├─────────────────────────────────────────┤   │
-│    │ [1] scan-pii (ExtProc)                  │   │
+│    │ [1] scan-pii (ExtProcess)               │   │
 │    │     backendRef: pii-scanner:4444        │   │
 │    │     failureMode: FailClosed             │   │
 │    ├─────────────────────────────────────────┤   │
-│    │ [2] enrich-context (ExtProc)            │   │
+│    │ [2] enrich-context (ExtProcess)         │   │
 │    │     backendRef: context-service:8080    │   │
 │    │     failureMode: FailOpen               │   │
 │    └─────────────────────────────────────────┘   │
@@ -236,7 +237,7 @@ spec:
   # are skipped and the request is rejected.
   processors:
   - name: extract-model             # unique within this resource, 1-63 chars
-    type: InProcess                  # InProcess or ExtProc
+    type: InProcess                  # InProcess or ExtProcess
     failureMode: FailClosed          # FailClosed (default) or FailOpen
     timeout: "500ms"                 # optional per-processor timeout
 
@@ -244,23 +245,32 @@ spec:
     # Required when type is InProcess.
     inProcess:
       request:
-        # set: overwrite or create headers with CEL expression values
-        set:
+        # setHeaders: overwrite or create headers with CEL expression values
+        setHeaders:
         - name: X-Gateway-Model-Name
-          value: 'json(request.body).model'
-        # add: append headers (does not overwrite existing)
-        add: []
-        # remove: remove headers by name
-        remove: []
+          value: 'json(request.body).model'   # CEL expression
+        - name: X-Gateway-Custom-Header
+          value: '"my-custom-value"'          # string literal interpreted by CEL
+        # removeHeaders: remove headers by name
+        removeHeaders: []
+        # setBodyFields: overwrite or create body fields (JSONPath) with values
+        setBodyFields:
+        - name: '$.stream'                    # JSONPath
+          value: 'true'
+        - name: '$.stream_options'            # JSONPath
+          value: '{"include_usage": true}'
+        # removeBodyFields: remove body fields by name (JSONPath)
+        removeBodyFields:
+        - name: '$.user_email'                # JSONPath
 
   - name: pii-scanner
-    type: ExtProc
+    type: ExtProcess
     failureMode: FailClosed
     timeout: "1s"
 
-    # extProc: configuration for external processor.
-    # Required when type is ExtProc.
-    extProc:
+    # extProcess: configuration for external processor.
+    # Required when type is ExtProcess.
+    extProcess:
       backendRef:
         kind: Service
         name: pii-scanner-service
@@ -292,7 +302,7 @@ Client Request
     ▼
 ┌──────────────────────┐
 │  PreRouting Phase    │ ◄── PayloadProcessor (targetRef: Gateway)
-│  InProcess/ExtProc   │     Mutate headers from body content
+│  InProcess/ExtProc   │     Mutate headers/body from content
 └──────────┬───────────┘
            │ (headers mutated)
            ▼
@@ -315,8 +325,9 @@ Client Request
 ### InProcess Processors
 
 InProcess processors run within the gateway data plane and use CEL expressions
-to extract data from the request body and mutate headers. This is the primary
-mechanism for body-based routing and lightweight request transformation.
+to extract data from the request body and mutate request headers and body
+fields. This is the primary mechanism for body-based routing and lightweight
+request transformation.
 
 **CEL Context Available:**
 
@@ -330,19 +341,20 @@ TODO: Define a CEL standard library for payload processing with functions like `
 | `request.path` | `string` | Request path |
 | `json(request.body)` | `map` | Parsed JSON body (convenience function) |
 
-**Header Mutation Operations:**
+**Header and Body Field Mutation Operations:**
 
 | Operation | Behavior |
 |-----------|----------|
-| `set` | Overwrites existing header or creates new one. Value is a CEL expression. |
-| `add` | Appends to existing header or creates new one. Value is a CEL expression. |
-| `remove` | Removes header by name. |
+| `setHeaders` | Overwrites an existing header or creates a new one. Value is a CEL expression. |
+| `removeHeaders` | Removes a header by name. |
+| `setBodyFields` | Overwrites or creates a body field addressed by JSONPath. Value is a static value or a CEL expression evaluated over the payload body. |
+| `removeBodyFields` | Removes a body field addressed by JSONPath. |
 
-**Body Buffering:** When any CEL expression references `request.body`, the
-gateway implementation MUST buffer the entire request body before evaluating
-expressions. Implementations SHOULD define a maximum buffer size (recommended
-default: 2 MiB) and MUST reject requests exceeding the buffer limit when
-`failureMode` is `FailClosed`.
+**Body Buffering:** When any CEL expression references `request.body`, or a
+processor sets or removes body fields, the gateway implementation MUST buffer
+the entire request body before evaluating expressions. Implementations SHOULD
+define a maximum buffer size (recommended default: 2 MiB) and MUST reject
+requests exceeding the buffer limit when `failureMode` is `FailClosed`.
 
 **Example — Body-Based Routing:**
 
@@ -363,7 +375,7 @@ spec:
     failureMode: FailClosed
     inProcess:
       request:
-        set:
+        setHeaders:
         - name: X-Gateway-Model-Name
           value: 'json(request.body).model'
 ---
@@ -472,7 +484,7 @@ The `PayloadProcessor` CRD uses Kubernetes-native validation mechanisms:
   (1-16 processors, 1-63 char names, 1-256 char header names)
 * **CEL validation rules** (`x-kubernetes-validations`):
   * Exactly one of `inProcess` or `extProcess` MUST be set per processor
-    (enforced by: `has(self.inProcess) != has(self.extProc)`)
+    (enforced by: `has(self.inProcess) != has(self.extProcess)`)
   * `targetRef.kind` MUST be `Gateway` or `ListenerSet` when `phase` is
     `PreRouting`
   * Processor names MUST be unique within the resource
@@ -507,12 +519,13 @@ and Extended features:
 
 | Feature | Level | Description |
 |---------|-------|-------------|
-| InProcess header mutation (set/add/remove) | Core | CEL expressions extract body fields and set/add/remove headers |
+| InProcess header mutation (setHeaders/removeHeaders) | Core | CEL expressions extract body fields and set/remove headers |
+| InProcess body field mutation (setBodyFields/removeBodyFields) | Extended | CEL/JSONPath expressions set or remove request body fields |
 | PreRouting phase | Core | Processors execute before HTTPRoute matching |
 | `FailClosed` / `FailOpen` per processor | Core | Per-processor failure mode selection |
 | Sequential processor ordering | Core | Deterministic array-order execution with short-circuit rejection |
 | Policy attachment to Gateway | Core | `targetRef` to Gateway resource |
-| ExtProc with `backendRef` | Extended | External gRPC service for arbitrary processing |
+| ExtProcess with `backendRef` | Extended | External gRPC service for arbitrary processing |
 | PostRouting phase | Extended | Processors execute after route selection |
 | Policy attachment to HTTPRoute | Extended | `targetRef` to HTTPRoute resource |
 | Per-processor timeout | Extended | Timeout enforcement for individual processors |
@@ -743,6 +756,8 @@ use any protocol.
 The current design says no — PreRouting processors execute once, mutate
 headers, and then HTTPRoute matching occurs on the mutated headers. There is
 no re-entry. This avoids infinite loops but limits some advanced use cases.
+PostRouting processors can mutate headers, but those mutations do not affect
+the routing decision that has already been made.
 
 ### Gateway-Level and HTTPRoute-Level Co-existence
 
@@ -752,7 +767,10 @@ no re-entry. This avoids infinite loops but limits some advanced use cases.
 The current proposal applies them in phase order: Gateway-targeted
 PreRouting processors execute first, then HTTPRoute matching, then
 HTTPRoute-targeted PostRouting processors. If both target the same phase,
-Gateway-level processors execute before HTTPRoute-level processors.
+Gateway-level processors execute before HTTPRoute-level processors. If two
+PayloadProcessors target the same phase with the same target reference, the
+newer resource is ignored and the older resource is used; the resulting
+conflict is reflected in the status of the newer resource.
 
 ### CEL Cost Budgets
 
@@ -770,6 +788,52 @@ their CEL cost limits.
 The POC uses a gateway-wide default (2 MiB). Per-processor configuration
 adds flexibility but also complexity. The initial proposal defers this to
 implementation-defined configuration.
+
+### Parallel Processing
+
+> Should multiple processors be able to execute in parallel?
+
+The initial design executes processors sequentially in array order. The ability
+to specify and process multiple payload processors in parallel (both InProcess
+and ExtProcess) adds complexity but should be considered for performance in a
+future phase.
+
+### Header and Body Modification Order
+
+> In what order are header and body modifications applied within a processor?
+
+There is currently no defined order for when header and body modifications occur
+relative to each other. This could lead to unexpected behavior when the order
+matters for the processing logic and needs to be specified.
+
+### InProcess and ExtProcess Ordering
+
+> Should ExtProcess processors always run before InProcess processors?
+
+ExtProcess processors are considered the heavy lifters of processing, while
+InProcess processors are more lightweight and suited for final formatting and
+transformation tasks. One option under discussion is to always process
+ExtProcess processors before InProcess processors, independent of array order.
+
+### Request and Response Handling
+
+> How should buffering be controlled for responses?
+
+Buffering a response can negatively impact time to first token. When a processor
+does not require buffering, the response can be processed in chunks. The current
+API does not provide a way for users to control this behavior.
+
+### Injecting Confidential Data
+
+> How should confidential data be injected into payloads or headers?
+
+The current design does not provide a mechanism for injecting confidential data
+(e.g. API keys, secrets) into request or response payloads and/or headers. One
+option is a per-processor `secretRef` field naming the secrets to inject.
+Another is a set of confidential-data references, defined once and accessible to
+all processors, that each processor references for injection via a predefined
+key (e.g. `credential.<cred name>.<cred field>`). The exact mechanism for
+securely injecting confidential data will be addressed in a future phase.
 
 ### ExtProc Buffering
 
