@@ -10,9 +10,9 @@ This GEP proposed APIs for configuring rate limit policies for requests flowing 
 these policies to protect their services from overload, divide capacity among different traffic classes or control costs
 of serving requests.
 
-The rate limit policy is defined as a *volume* of traffic per unit of time. The volume can be debited from the limit on request,
-response, or both traffic directions. The volume can be expressed in bytes or requests, including an arbitrary computation of the cost
-of the unit of volume. This can allow simple policies expressed in bytes per second for forwarding TCP bytestreams or requests
+The rate limit policy is defined as a *volume* of traffic over a rolling period of time. The volume can be expressed in bytes or
+requests, including an arbitrary computation of the cost of the unit of volume. The volume can be debited from the limit on request,
+response, or both traffic directions. This can allow simple policies expressed in bytes per second for forwarding TCP bytestreams or requests
 per second for HTTP or gRPC requests and complex policies for limiting the number of tokens per minute for inference requests.
 
 The scope of the rate limit policy is determined by the attachment point as well as any traffic matchers defined by the policy. In a
@@ -29,7 +29,7 @@ set of rate limit buckets, for example for equally sharing capacity among all te
 
 ## Overview
 
-Rate limiting is well established mechanism for protecting services from overload, enforcing fare sharing of capacity or
+Rate limiting is well established mechanism for protecting services from overload, enforcing fair sharing of capacity or
 controlling costs of serving requests. Operators can express limits in bytes or requests per time unit, depending
 on whether the gateway is forwarding at the network or application layer of the [OSI model](https://en.wikipedia.org/wiki/OSI_model).
 
@@ -58,6 +58,68 @@ for inference requests have to be expressed in tokens to be of practical use.
 
 ### API Definition
 
+```go
+// XRateLimitPolicy specifies rate limit policy.
+//
+// +genclient
+// +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
+// +kubebuilder:object:root=true
+// +kubebuilder:subresource:status
+// +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[-1:].type`
+// +kubebuilder:metadata:labels="gateway.networking.k8s.io/policy=direct"
+type XRateLimitPolicy struct {
+	metav1.TypeMeta   `json:",inline"`
+	metav1.ObjectMeta `json:"metadata,omitempty"`
+	Spec              RateLimitPolicySpec `json:"spec,omitempty"`
+	// Status defines the status details of the XRateLimitPolicy.
+	Status XRateLimitPolicyStatus `json:"status,omitempty"`
+}
+
+// RateLimitPolicySpec specifies rate limiting rules and the scope of their application.
+type RateLimitPolicySpec struct {
+	// TargetRefs are the resources this XRateLimitPolicy is being attached to.
+	//
+	// +optional
+	// +kubebuilder:validation:MaxItems=16 (TODO: maybe remove this limit)
+	TargetRefs []gwapiv1a2.LocalPolicyTargetReference `json:"targetRefs,omitempty"`
+	// `rules` is an ordered list of rate limits together with optional traffic matchers.
+  // `rules` are matched sequentially. Request cost is debited from all matching rules.
+  // If any matching rate limit rule is above the limit, request is throttled.
+	//
+	// +kubebuilder:validation:MaxItems=128 (TODO: is this too low ?)
+	// +optional
+	Rules []RateLimitRule `json:"rules,omitempty"`
+  // +optional
+  MatchFailureMode MatchFailureMode `json: matchFailureMode,omitempty`
+  EmitRateLimitResponseHeaders ResponseHeadersMode `json: emitRateLimitResponseHeaders,omitempty`
+}
+
+type RateLimitRule struct {
+}
+
+// MatchFailureMode determines the behavior when none of the rules match the request.
+//
+// +kubebuilder:validation:Enum=Exclusive;Shared
+type MatchFailureMode string
+
+const (
+	MatchFailureModeOpen     MatchFailureMode = "FailOpen"
+	MatchFailureModeClosed   MatchFailureMode = "FailClosed"
+)
+
+// ResponseHeadersMode ....
+//
+// +kubebuilder:validation:Enum=Exclusive;Shared
+type ResponseHeadersMode string
+
+const (
+  // No rate limit response headers are emitted.
+	ResponseHeadersModeDisabled     ResponseHeadersMode = "Disabled"
+  // Emit response header according to https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers-03
+	ResponseHeadersModeDraft3       ResponseHeadersMode = "DRAFT-3"
+)
+```
+
 ```yaml
 apiVersion: gateway.networking.x-k8s.io/v1alpha1
 kind: XRateLimitPolicy
@@ -76,8 +138,7 @@ spec:
   # `rules` are matched sequentially. Request cost is debited from all matching rules.
   # If any matching request buckets are above the limit, request is throttled.
   rules:
-  - name: rule-name                  # unique user defined name within this resource
-    limit:
+  - limit:
       volumeUnits: REQUESTS          # REQUESTS, BYTES or TOKENS
       volume: 1024                   # bytes or requests are exclusive
       timeUnit: SECONDS              # MINUTES, HOURS, DAYS, WEEKS, MONTHS, ? YEARS
