@@ -68,27 +68,27 @@ for inference requests have to be expressed in tokens to be of practical use.
 // +kubebuilder:printcolumn:name="Status",type=string,JSONPath=`.status.conditions[-1:].type`
 // +kubebuilder:metadata:labels="gateway.networking.k8s.io/policy=direct"
 type XRateLimitPolicy struct {
-	metav1.TypeMeta   `json:",inline"`
-	metav1.ObjectMeta `json:"metadata,omitempty"`
-	Spec              RateLimitPolicySpec `json:"spec,omitempty"`
-	// Status defines the status details of the XRateLimitPolicy.
-	Status XRateLimitPolicyStatus `json:"status,omitempty"`
+  metav1.TypeMeta   `json:",inline"`
+  metav1.ObjectMeta `json:"metadata,omitempty"`
+  Spec              RateLimitPolicySpec `json:"spec,omitempty"`
+  // Status defines the status details of the XRateLimitPolicy.
+  Status XRateLimitPolicyStatus `json:"status,omitempty"`
 }
 
 // RateLimitPolicySpec specifies rate limiting rules and the scope of their application.
 type RateLimitPolicySpec struct {
-	// TargetRefs are the resources this XRateLimitPolicy is being attached to.
-	//
-	// +optional
-	// +kubebuilder:validation:MaxItems=16 (TODO: maybe remove this limit)
-	TargetRefs []gwapiv1a2.LocalPolicyTargetReference `json:"targetRefs,omitempty"`
-	// `rules` is an ordered list of rate limits together with optional traffic matchers.
+  // TargetRefs are the resources this XRateLimitPolicy is being attached to.
+  //
+  // +optional
+  // +kubebuilder:validation:MaxItems=16 (TODO: maybe remove this limit)
+  TargetRefs []gwapiv1a2.LocalPolicyTargetReference `json:"targetRefs,omitempty"`
+  // `rules` is an ordered list of rate limits together with optional traffic matchers.
   // `rules` are matched sequentially. Request cost is debited from all matching rules.
   // If any matching rate limit rule is above the limit, request is throttled.
-	//
-	// +kubebuilder:validation:MaxItems=128 (TODO: is this too low ?)
-	// +optional
-	Rules []RateLimitRule `json:"rules,omitempty"`
+  //
+  // +kubebuilder:validation:MaxItems=128 (TODO: is this too low ?)
+  // +optional
+  Rules []RateLimitRule `json:"rules,omitempty"`
   // +optional
   MatchFailureMode MatchFailureMode `json: matchFailureMode,omitempty`
   EmitRateLimitResponseHeaders ResponseHeadersMode `json: emitRateLimitResponseHeaders,omitempty`
@@ -103,8 +103,8 @@ type RateLimitRule struct {
 type MatchFailureMode string
 
 const (
-	MatchFailureModeOpen     MatchFailureMode = "FailOpen"
-	MatchFailureModeClosed   MatchFailureMode = "FailClosed"
+  MatchFailureModeOpen     MatchFailureMode = "FailOpen"
+  MatchFailureModeClosed   MatchFailureMode = "FailClosed"
 )
 
 // ResponseHeadersMode ....
@@ -114,9 +114,9 @@ type ResponseHeadersMode string
 
 const (
   // No rate limit response headers are emitted.
-	ResponseHeadersModeDisabled     ResponseHeadersMode = "Disabled"
+  ResponseHeadersModeDisabled     ResponseHeadersMode = "Disabled"
   // Emit response header according to https://datatracker.ietf.org/doc/html/draft-ietf-httpapi-ratelimit-headers-03
-	ResponseHeadersModeDraft3       ResponseHeadersMode = "DRAFT-3"
+  ResponseHeadersModeDraft3       ResponseHeadersMode = "DRAFT-3"
 )
 ```
 
