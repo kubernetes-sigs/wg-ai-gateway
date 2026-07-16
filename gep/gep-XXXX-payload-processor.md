@@ -53,11 +53,11 @@ implementation-specific extensions with no portability.
 AI inference workloads send model selection, prompt content, and configuration
 in the request body (typically JSON). Key decisions — which model to route to,
 whether the prompt contains PII or injection attacks, whether to cache the
-response — all require reading the body. Today, the llm-d has an implemention of
+response — all require reading the body. Today, llm-d has an implementation of
 a Body-Based Router (BBR) to extract model names for routing. This is the primary
 implementation of the pluggable BBR framework proposed by [Gateway API Inference Extension (GAIE)].
-This proposal is in a draft state and the reference implemenation in no longer within
-the GAIE repo.
+This proposal is in a draft state and the reference implementation is no longer
+within the GAIE repo.
 
 ### External Processing Varies Per Proxy
 
@@ -285,7 +285,7 @@ execute relative to HTTPRoute matching:
 | Phase | When | Allowed targetRef Kinds | Use Cases |
 |-------|------|------------------------|-----------|
 | `PreRouting` | Before HTTPRoute matching | `Gateway`, `ListenerSet` | Body-based routing (extract field → set header → HTTPRoute matches on header), request validation |
-| `PostRouting` | After route selected, before backend dispatch | `Gateway`, `ListenerSet`, `HTTPRoute` | PII scanning, content enrichment, response processing (future) |
+| `PostRouting` | After route selected, before backend dispatch | `Gateway`, `ListenerSet`, `HTTPRoute` | PII scanning, content enrichment |
 
 **PreRouting** processors execute on all traffic entering the Gateway (or
 listener), before any HTTPRoute rules are evaluated. This enables the core
@@ -663,10 +663,6 @@ is a significant design decision. We evaluated several alternatives:
   not Kubernetes-native; poor observability
 * **Verdict**: Too powerful and too risky for inline expressions; better
   suited for ExtProc implementations
-
-#### Recommendation
-
-TODO
 
 ### Inline HTTPRoute Filter vs. Separate CRD
 

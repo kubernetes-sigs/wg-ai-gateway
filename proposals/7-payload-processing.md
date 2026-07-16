@@ -58,7 +58,7 @@ payload processing is not standardized in Kubernetes today.
 
 * As a developer of Agentic AI platforms:
 
-  * I need the ability to process the payload of ModelContextProtocol (MCP)
+  * I need the ability to process the payload of Model Context Protocol (MCP)
     requests to make routing and security decisions.
 
   * I want to set or modify request headers based on payload attributes so that
@@ -264,21 +264,21 @@ spec:
     # Required when type is InProcess.
     inProcess:
       request:
-        # set: overwrite or create headers with CEL expression values
+        # setHeaders: overwrite or create headers with CEL expression values
         setHeaders:
         - name: X-Gateway-Model-Name
-          value: 'json(request.body).model' # CEl expression
+          value: 'json(request.body).model' # CEL expression
         - name: X-Gateway-Custom-Header
           value: '"my-custom-value"' # string literal interpreted by CEL
-        # remove: remove headers by name
+        # removeHeaders: remove headers by name
         removeHeaders: []
-        # set: overwrite or create body fields with CEL expression values
+        # setBodyFields: overwrite or create body fields with CEL expression values
         setBodyFields:
         - name: '$.stream' # JSONPath
           value: 'true' # body can be built using static fields, CEL expressions on the body of the request or response, etc.
         - name: '$.stream_options' # JSONPath
           value: '{"include_usage": true}'
-        # remove: remove body fields by name
+        # removeBodyFields: remove body fields by name
         removeBodyFields:
         - name: '$.user_email' # JSONPath
   - name: pii-scanner
@@ -318,7 +318,7 @@ spec:
     failureMode: FailClosed
     inProcess:
       request:
-        set:
+        setHeaders:
         - name: X-Gateway-Model-Name
           value: 'json(request.body).model'
 ---
@@ -374,10 +374,18 @@ spec:
 * **Header and Body Modification Order**: There is no defined order for when
   headers and body modifications occur relative to each other. This could lead to
   unexpected behavior if the order matters for the processing logic.
-* **InProcess and ExtProcess Processing**: ExtProcess processors are considered
+* **InProcess and ExtProcess Ordering**: Should ExtProcess processors always
+  run before InProcess processors? ExtProcess processors are often considered
   the heavy lifters of processing, while InProcess processors are more
-  lightweight and suitable for final formatting and transformation tasks.
-  ExtProcess processors are processed before InProcess processors.
+  lightweight and suitable for final formatting and transformation tasks. One
+  option under discussion is to always process ExtProcess processors before
+  InProcess processors, independent of array order.
+* **Response Processing Phase**: Should response processing run in a dedicated
+  response phase after backend invocation, rather than sharing `PostRouting`
+  with request processing?
+* **State Passing Between Processors**: Should the API support passing internal
+  state between processors without relying on headers or body mutation as a
+  transport mechanism?
 * **Request and Response Handling**: Buffering a response can negatively impact time to first
   token. If a payload process doesn't require buffering, the response can be processed
   in chunks. The current API does not provide a way for users to control this behavior.
