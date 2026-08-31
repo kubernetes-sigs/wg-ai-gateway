@@ -22,8 +22,7 @@ For these workloads, what the client sees as one request is fulfilled by a seque
 each of which is independently routable and may need its own networking configuration:
 
 * **Inference disaggregation**: a single inference request is served by separate prefill and decode backends, 
-  and increasingly by separate encode, prefill and decode backends.  
-  Each is a distinct pool of endpoints with distinct routing and scaling characteristics, and selecting the right
+  and increasingly by separate encode, prefill and decode backends, each is a distinct pool of endpoints with distinct routing and scaling characteristics, and selecting the right
   endpoint within a pool is itself a load-aware decision made per request. The interactions are also coupled: state established 
   while serving one is consumed by the next.
 
@@ -68,7 +67,7 @@ processing is a gap in that substrate, and it is being filled today by duplicate
 * **Stage**: one of the backend interactions that together fulfill a logical request. A stage is independently routable and may carry its 
   own networking configuration.
 
-* **Orchestration**: the per-request decisions taken while a logical request is being fulfilled — which stage runs next, whether a stage is skipped, 
+* **Orchestration**: the per-request decisions taken while a logical request is being fulfilled: which stage runs next, whether a stage is skipped, 
   how the input to a stage is derived from what came before, and whether the exchange should end early. Configuration declares the rules for these 
   decisions; the decisions themselves are made per request, against that request's data.
 
@@ -178,7 +177,7 @@ pipeline author's, and neither has to know about the other.
 `MultiStageRoute` introduces no vocabulary of its own for inspecting or mutating payloads. It reuses whatever [GEP-5091] lands on, and adds exactly one thing to
 the expression context: a binding that lets an expression refer to an earlier stage, written here as `stage(<name>)`.
 
-Stage-level filters are the same filter types a route uses. They sit on the stage rather than on the route precisely because they reference other stages, which is
+Stage-level payload processirs are the same ones a route uses. They sit on the stage rather than on the route precisely because they reference other stages, which is
 composition knowledge.
 
 The following sections assumes filters as the mechanism for implementing `Payload Processor` GEP. if that GEP lands on a different implemetation, the yaml examples would be updated accordingly.   
