@@ -177,7 +177,7 @@ pipeline author's, and neither has to know about the other.
 `MultiStageRoute` introduces no vocabulary of its own for inspecting or mutating payloads. It reuses whatever [GEP-5091] lands on, and adds exactly one thing to
 the expression context: a binding that lets an expression refer to an earlier stage, written here as `stage(<name>)`.
 
-Stage-level payload processirs are the same ones a route uses. They sit on the stage rather than on the route precisely because they reference other stages, which is
+Stage-level payload processors are the same ones a route uses. They sit on the stage rather than on the route precisely because they reference other stages, which is
 composition knowledge.
 
 The following sections assumes filters as the mechanism for implementing `Payload Processor` GEP. if that GEP lands on a different implemetation, the yaml examples would be updated accordingly.   
