@@ -82,7 +82,8 @@ type gatewayResources struct {
 type aiGatewayResources struct {
 	client aigatewayclientset.Interface
 
-	backendLister aigatewaylisters.XBackendDestinationLister
+	backendLister   aigatewaylisters.XBackendDestinationLister
+	processorLister aigatewaylisters.XPayloadProcessorLister
 }
 
 type controller struct {
@@ -128,8 +129,9 @@ func NewController(
 			httpRouteLister:    gatewayInformerFactory.Gateway().V1().HTTPRoutes().Lister(),
 		},
 		aigateway: &aiGatewayResources{
-			client:        aigatewayClient,
-			backendLister: aigatewayInformerFactory.Ainetworking().V0alpha0().XBackendDestinations().Lister(),
+			client:          aigatewayClient,
+			backendLister:   aigatewayInformerFactory.Ainetworking().V0alpha0().XBackendDestinations().Lister(),
+			processorLister: aigatewayInformerFactory.Ainetworking().V0alpha0().XPayloadProcessors().Lister(),
 		},
 		stop:            ctx.Done(),
 		envoyProxyImage: envoyProxyImage,
@@ -148,6 +150,7 @@ func NewController(
 			gatewayInformerFactory.Gateway().V1().Gateways().Lister(),
 			gatewayInformerFactory.Gateway().V1().HTTPRoutes().Lister(),
 			aigatewayInformerFactory.Ainetworking().V0alpha0().XBackendDestinations().Lister(),
+			aigatewayInformerFactory.Ainetworking().V0alpha0().XPayloadProcessors().Lister(),
 		),
 	}
 
@@ -159,6 +162,7 @@ func NewController(
 		gatewayInformerFactory.Gateway().V1().Gateways().Informer().HasSynced,
 		gatewayInformerFactory.Gateway().V1().HTTPRoutes().Informer().HasSynced,
 		aigatewayInformerFactory.Ainetworking().V0alpha0().XBackendDestinations().Informer().HasSynced,
+		aigatewayInformerFactory.Ainetworking().V0alpha0().XPayloadProcessors().Informer().HasSynced,
 	}
 
 	// Set up event handlers for Gateway API resources
@@ -172,6 +176,10 @@ func NewController(
 
 	if err := c.setupHTTPRouteEventHandlers(gatewayInformerFactory.Gateway().V1().HTTPRoutes()); err != nil {
 		return nil, fmt.Errorf("failed to setup httproute event handlers: %w", err)
+	}
+
+	if err := c.setupProcessorEventHandlers(aigatewayInformerFactory.Ainetworking().V0alpha0().XPayloadProcessors()); err != nil {
+		return nil, fmt.Errorf("failed to setup processor event handlers: %w", err)
 	}
 
 	return c, nil
